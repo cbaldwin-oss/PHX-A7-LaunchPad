@@ -1020,7 +1020,7 @@ html, body {
 <div class="header">
     
    <div class="header-left">
-        <img src="https://lh3.googleusercontent.com/u/0/d/1hO2lUezgCX-RhDS6e1Ssa0Ys8URVOvIt" alt="Logo">
+        <img src="https://lh3.googleusercontent.com/u/0/d/19X-3FQsiBXcebD2B_USMMtzDzgVfKSnX" alt="Logo">
     </div>
     <div class="header-center">
         <span>LaunchPad</span>
@@ -2075,8 +2075,8 @@ async function declineUser(email, requestId) { // Added email parameter here
     if (!confirm(`Are you sure you want to decline the request from ${email}?`)) return;
 
     try {
-        // 1. Remove from access_requests
-        const { error } = await _supabase.from('access_requests').delete().eq('id', requestId);
+        // 1. Remove from PHXA7access_requests
+        const { error } = await _supabase.from('PHXA7access_requests').delete().eq('id', requestId);
         if (error) throw error;
 
         // 2. Send Notification Email via Google Script
@@ -2092,7 +2092,7 @@ async function declineUser(email, requestId) { // Added email parameter here
 
 async function refreshRequestList() {
     const listContainer = document.getElementById('request-list');
-    const { data, error } = await _supabase.from('access_requests').select('*');
+    const { data, error } = await _supabase.from('PHXA7access_requests').select('*');
 
     if (error || !data || data.length === 0) {
         listContainer.innerHTML = '<p style="color: #666; font-size: 13px; text-align: center; padding: 20px;">No pending requests.</p>';
@@ -2126,8 +2126,8 @@ async function admitUser(email, company, requestId) {
         
         if (addError) throw addError;
 
-        // 2. Remove from access_requests
-        await _supabase.from('access_requests').delete().eq('id', requestId);
+        // 2. Remove from PHXA7access_requests
+        await _supabase.from('PHXA7access_requests').delete().eq('id', requestId);
 
         // 3. Send Notification Email via Google Script
         const url = `${GOOGLE_SCRIPT_URL}?action=notifyAdmit&email=${encodeURIComponent(email)}`;
@@ -2202,7 +2202,7 @@ function initRealtimeSync() {
         .on('postgres_changes', { 
             event: '*', // Listen to INSERT, UPDATE, and DELETE
             schema: 'public', 
-            table: 'BackEndData' // FIX: Corrected table name
+            table: 'PHXA7BackEndData' // FIX: Corrected table name
         }, payload => {
             if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
                 const row = payload.new;
@@ -2933,7 +2933,7 @@ function saveCell(cell, value, colIndex, isImmediate = false) {
         updateObj[`col${colIndex}`] = currentValue;
 
         const { data, error } = await _supabase
-            .from('BackEndData')
+            .from('PHXA7BackEndData')
             .upsert([updateObj])
             .select();
 
@@ -3414,7 +3414,7 @@ async function deleteFullRow(wrapperId, bypassConfirm = false) {
         }
 
         try {
-            const { error } = await _supabase.from('BackEndData').delete().eq('id', rowNumericId);
+            const { error } = await _supabase.from('PHXA7BackEndData').delete().eq('id', rowNumericId);
             if (error) throw error;
         } catch (err) {
             console.error("Delete error:", err.message);
@@ -3484,7 +3484,7 @@ async function saveRow(rowNum, dayLabel, col6Override = null) {
     };
 
     try {
-        const { error } = await _supabase.from('BackEndData').upsert(rowData, { onConflict: 'id' });
+        const { error } = await _supabase.from('PHXA7BackEndData').upsert(rowData, { onConflict: 'id' });
         if (!error) document.getElementById('saveIndicator').innerText = `Last saved at: ${getTimestamp()}`;
     } catch (err) {
         console.error("🔴 Save Error:", err);
@@ -3750,7 +3750,7 @@ async function submitAccessRequest() {
     try {
         // 1. Log request with Company in Supabase
         const { error: dbError } = await _supabase
-            .from('access_requests')
+            .from('PHXA7access_requests')
             .insert([{ email, company }]);
         
         if (dbError) throw dbError;
@@ -3785,7 +3785,7 @@ function getTimestamp() {
 
 async function loadData(isSilent = false) {
     try {
-        const { data, error } = await _supabase.from('BackEndData').select('*');
+        const { data, error } = await _supabase.from('PHXA7BackEndData').select('*');
         if (error) throw error;
 
         if (data) {

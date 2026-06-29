@@ -1616,7 +1616,7 @@ async function showCellHistory(e, rowId, colIndex) {
     content.innerHTML = '<p style="text-align:center; color:#666;">Loading history...</p>';
 
     const { data, error } = await _supabase
-        .from('edit_history')
+        .from('PHXA7edit_history')
         .select('*')
         .eq('row_id', rowId)
         .eq('col_index', colIndex)
@@ -2119,9 +2119,9 @@ async function refreshRequestList() {
 
 async function admitUser(email, company, requestId) {
     try {
-        // 1. Add to authorized_editors including the company
+        // 1. Add to PHXA7authorized_editors including the company
         const { error: addError } = await _supabase
-            .from('authorized_editors')
+            .from('PHXA7authorized_editors')
             .insert([{ email: email.toLowerCase(), company: company }]);
         
         if (addError) throw addError;
@@ -2291,10 +2291,10 @@ async function handleForgotPin() {
 // 1. Function to handle sending the Magic Link
 // --- AUTHENTICATION LOGIC ---
 
-// 1. Verify if email exists in your authorized_editors table
+// 1. Verify if email exists in your PHXA7authorized_editors table
 async function verifyPermission(email) {
     const { data, error } = await _supabase
-        .from('authorized_editors')
+        .from('PHXA7authorized_editors')
         .select('is_admin, company') // Fetch company here
         .eq('email', email.toLowerCase())
         .single();
@@ -2360,7 +2360,7 @@ async function completeAppLaunch() {
     
     try {
         // Load the actual schedule data
-        await fetchDropdownOptions();
+        await fetchPHXA7dropdownoptions();
         refreshDropdowns();
         await loadData();
         initRealtimeSync();
@@ -2428,7 +2428,7 @@ if (permissions.isAuthorized) {
 
     if (window.isAdmin) {
         console.log("🧹 Admin detected: Cleaning up old history records...");
-        const { error } = await _supabase.rpc('delete_old_edit_history');
+        const { error } = await _supabase.rpc('delete_old_PHXA7edit_history');
         if (error) console.error("Cleanup Error:", error);
     }
     
@@ -2445,7 +2445,7 @@ if (permissions.isAuthorized) {
     }
     
     // Continue with the rest of the launch sequence
-    await fetchDropdownOptions();
+    await fetchPHXA7dropdownoptions();
     initPresence(user.email); 
     refreshDropdowns();
     await loadData();
@@ -2481,7 +2481,7 @@ async function processGrantAccess() {
     try {
         // --- THE INTERACTION WITH SUPABASE ---
         const { error } = await _supabase
-            .from('authorized_editors')
+            .from('PHXA7authorized_editors')
             .insert([{ email: emailToAdd.toLowerCase() }]);
 
         if (error) throw error;
@@ -2729,14 +2729,14 @@ async function syncAllAssetLookups() {
     }
 }
 
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzuFE1ZBtJ0OFk4qNz27fmukZyErRJGW5CR2ANVdMNZh8P6jCGMp41Jg0dz3kQO143F/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxAGGzz8TSK29Zz-nDPw72FnhqoyCkYX-OU0bW8xbZ27QYMZjqaf57GQIgdPD9Bt1It/exec';
 
 let dropdownData = { col1: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
 
-async function fetchDropdownOptions() {
+async function fetchPHXA7dropdownoptions() {
     // 1. Fetch ALL columns at once so we can see which Assets map to which Places on the same row
     const { data, error } = await _supabase
-        .from('dropdownoptions')
+        .from('PHXA7dropdownoptions')
         .select('Times, Places, Activities, Assets, Trade_Partners, Results')
         .range(0, 1000); 
 
@@ -2944,7 +2944,7 @@ function saveCell(cell, value, colIndex, isImmediate = false) {
             // --- LOG TO EDIT HISTORY ---
             // Only log if this wasn't a redundant failsafe save
             if (currentValue !== oldValue) {
-                await _supabase.from('edit_history').insert([{
+                await _supabase.from('PHXA7edit_history').insert([{
                     row_id: parseInt(rowNum),
                     col_index: colIndex,
                     old_value: oldValue,
@@ -3703,7 +3703,7 @@ function switchToRequestView() {
     document.getElementById('auth-request-view').style.display = 'block';
     document.getElementById('auth-error').style.display = 'none';
     document.getElementById('auth-success').style.display = 'none';
-    fetchDropdownOptions(); // Ensure company list is loaded
+    fetchPHXA7dropdownoptions(); // Ensure company list is loaded
 }
 
 /**

@@ -1651,9 +1651,9 @@ document.addEventListener('click', (e) => {
 function switchMainView(viewType, btn) {
     // 1. Target the main view containers
     const dash = document.getElementById('dashboard-view');
-    const sett = document.getElementById('settings-view');
     const sched = document.getElementById('schedule-view');
     const equipmentView = document.getElementById('equipment-tracker-view'); 
+    const sett = document.getElementById('settings-view'); // May be null now
     
     // 2. Target the specific UI tools (Header buttons, Image, and Filter Sidebar)
     const schedControls = document.getElementById('schedule-header-controls');
@@ -1664,16 +1664,16 @@ function switchMainView(viewType, btn) {
     const mainContent = document.getElementById('main-content-area');
     const subheader = document.querySelector('.subheader');
     const frozenBar = document.querySelector('.frozen-bar');
-    const appBody = document.getElementById('app-body'); // NEW: Target the main wrapper
+    const appBody = document.getElementById('app-body'); 
     
     // Update active UI state on the clicked button
     document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
     btn.classList.add('active');
 
-    // Hide EVERYTHING first
-    dash.style.display = 'none';
-    sett.style.display = 'none';
-    sched.style.display = 'none';
+    // Hide EVERYTHING first (with safety checks!)
+    if (dash) dash.style.display = 'none';
+    if (sett) sett.style.display = 'none';
+    if (sched) sched.style.display = 'none';
     if (equipmentView) equipmentView.style.display = 'none';
     
     if (mainContent) mainContent.style.display = 'none';
@@ -1687,12 +1687,8 @@ function switchMainView(viewType, btn) {
 
     // Route view choice
     if (viewType === 'dashboard') {
-        dash.style.display = 'block';
+        if (dash) dash.style.display = 'block';
         if (appBody) appBody.style.width = 'calc(100% - 36px)'; // Stretches to right edge
-    } else if (viewType === 'settings') {
-        sett.style.display = 'block';
-        if (appBody) appBody.style.width = 'calc(100% - 36px)'; // Stretches to right edge
-        Settings.init(); 
     } else if (viewType === 'equipment') { 
         if (equipmentView) equipmentView.style.display = 'block'; 
         if (appBody) appBody.style.width = 'calc(100% - 36px)'; // Stretches to right edge
@@ -1705,7 +1701,7 @@ function switchMainView(viewType, btn) {
         // Squeeze the screen back to make room for the right-hand filter bar
         if (appBody) appBody.style.width = 'calc(100% - 72px)';
         
-        sched.style.display = 'block';
+        if (sched) sched.style.display = 'block';
         if (mainContent) mainContent.style.display = 'block';
         if (subheader) subheader.style.display = 'flex';
         if (frozenBar) frozenBar.style.display = 'flex';

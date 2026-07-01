@@ -1051,15 +1051,16 @@ html, body {
         <span class="nav-text">Equipment Tracker</span>
     </div>
 
+    <div class="nav-item" onclick="switchMainView('attributes', this)">
+        <span class="nav-icon">🏷️</span>
+        <span class="nav-text">Asset Attributes</span>
+    </div>
+
     <div class="nav-item" onclick="switchMainView('dashboard', this)">
         <span class="nav-icon">📊</span>
         <span class="nav-text">Dashboard</span>
     </div>
 
-    <div class="nav-item" onclick="switchMainView('attributes', this)">
-        <span class="nav-icon">🏷️</span>
-        <span class="nav-text">Asset Attributes</span>
-    </div>
     
     <div style="margin-top: auto; width: 100%;">
         <div id="nav-settings" class="nav-item" onclick="openScheduleConfigModal()" style="display: none; border-top: 1px solid #eee;">
@@ -1818,27 +1819,71 @@ function displayAssetDetails(assetObj, assetName) {
     
     document.getElementById('attr-title').innerText = assetName;
     
-    const grid = document.getElementById('attr-grid');
-    grid.innerHTML = '';
+    const container = document.getElementById('attr-grid');
+    container.innerHTML = '';
     
-    // Sort keys alphabetically so the attributes look organized
+    // Change the main container to block so we can stack multiple grids inside it
+    container.style.display = 'block'; 
+    
     const keys = Object.keys(assetObj).sort();
+    const groups = {};
     
+    // 1. Group the attributes by their prefix
     keys.forEach(key => {
-        // Skip the name header, as it's already the title
         if (key === 'Asset Name' || key === 'Asset') return;
         
-        const value = assetObj[key];
+        let groupName = "General";
+        let displayName = key;
         
-        const item = document.createElement('div');
-        item.style.cssText = "background: #f9f9f9; padding: 15px; border-radius: 6px; border: 1px solid #eee; display: flex; flex-direction: column;";
+        // Look for a colon to define the group prefix (e.g., "CDB-IOB: Voltage")
+        const colonIndex = key.indexOf(':');
+        if (colonIndex !== -1) {
+            groupName = key.substring(0, colonIndex).trim(); // "CDB-IOB"
+            displayName = key.substring(colonIndex + 1).trim(); // "Voltage"
+        }
         
-        item.innerHTML = `
-            <span style="font-size: 11px; color: #777; text-transform: uppercase; font-weight: bold; margin-bottom: 4px;">${key}</span>
-            <span style="font-size: 15px; color: #111; font-weight: 500; word-break: break-word;">${value}</span>
-        `;
+        if (!groups[groupName]) groups[groupName] = [];
+        groups[groupName].push({ originalKey: key, display: displayName, value: assetObj[key] });
+    });
+    
+    // 2. Sort the group names (force "General" to always be at the top)
+    const groupNames = Object.keys(groups).sort((a, b) => {
+        if (a === "General") return -1;
+        if (b === "General") return 1;
+        return a.localeCompare(b);
+    });
+    
+    // 3. Render each group as a separate section with its own grid
+    groupNames.forEach(gName => {
+        const section = document.createElement('div');
+        section.style.marginBottom = '30px';
         
-        grid.appendChild(item);
+        // Add a section header (Skip header if "General" is the ONLY group)
+        if (gName !== "General" || groupNames.length > 1) {
+            const header = document.createElement('h3');
+            header.innerText = gName;
+            header.style.cssText = "margin-top: 0; margin-bottom: 15px; color: #444; border-bottom: 2px solid #eee; padding-bottom: 8px; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;";
+            section.appendChild(header);
+        }
+        
+        // Create the grid for this specific group
+        const groupGrid = document.createElement('div');
+        groupGrid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;";
+        
+        groups[gName].forEach(attr => {
+            const item = document.createElement('div');
+            item.style.cssText = "background: #f9f9f9; padding: 15px; border-radius: 6px; border: 1px solid #eee; display: flex; flex-direction: column;";
+            
+            item.innerHTML = `
+                <span style="font-size: 11px; color: #777; text-transform: uppercase; font-weight: bold; margin-bottom: 4px;" title="${attr.originalKey}">${attr.display}</span>
+                <span style="font-size: 15px; color: #111; font-weight: 500; word-break: break-word;">${attr.value}</span>
+            `;
+            
+            groupGrid.appendChild(item);
+        });
+        
+        section.appendChild(groupGrid);
+        container.appendChild(section);
     });
 }
 

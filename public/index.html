@@ -1817,25 +1817,28 @@ function displayAssetDetails(assetObj, assetName) {
     const card = document.getElementById('attr-details-card');
     card.style.display = 'block';
     
-    document.getElementById('attr-title').innerText = assetName;
+    // Update title and add the Save Button next to it
+    document.getElementById('attr-title').innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>${assetName}</span>
+            <button id="attr-save-btn" onclick="saveAttributeChanges('${assetName}')" style="background: #2e7d32; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s; display: none;">Save Changes</button>
+        </div>
+    `;
     
     const container = document.getElementById('attr-grid');
     container.innerHTML = '';
-    
-    // Change the main container to block so we can stack multiple grids inside it
     container.style.display = 'block'; 
     
     const keys = Object.keys(assetObj).sort();
     const groups = {};
     
-    // 1. Group the attributes by their prefix
+    // Group the attributes
     keys.forEach(key => {
         if (key === 'Asset Name' || key === 'Asset') return;
         
         let groupName = "General";
         let displayName = key;
         
-        // Look for a colon to define the group prefix (e.g., "CDB-IOB: Voltage")
         const colonIndex = key.indexOf(':');
         if (colonIndex !== -1) {
             groupName = key.substring(0, colonIndex).trim();
@@ -1846,19 +1849,16 @@ function displayAssetDetails(assetObj, assetName) {
         groups[groupName].push({ originalKey: key, display: displayName, value: assetObj[key] });
     });
     
-    // 2. Sort the group names (force "General" to always be at the top)
     const groupNames = Object.keys(groups).sort((a, b) => {
         if (a === "General") return -1;
         if (b === "General") return 1;
         return a.localeCompare(b);
     });
     
-    // 3. Render each group as a separate section with its own grid
     groupNames.forEach(gName => {
         const section = document.createElement('div');
         section.style.marginBottom = '30px';
         
-        // Add a section header (Skip header if "General" is the ONLY group)
         if (gName !== "General" || groupNames.length > 1) {
             const header = document.createElement('h3');
             header.innerText = gName;
@@ -1866,7 +1866,6 @@ function displayAssetDetails(assetObj, assetName) {
             section.appendChild(header);
         }
         
-        // Create the grid for this specific group
         const groupGrid = document.createElement('div');
         groupGrid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;";
         
@@ -1876,21 +1875,33 @@ function displayAssetDetails(assetObj, assetName) {
             const rawValue = String(attr.value || "").trim();
             const isTBD = rawValue.toUpperCase() === 'TBD';
             
-            // --- NEW: Box Styling ---
-            // If TBD, apply light red background and solid red border. Otherwise, standard grey.
             item.style.cssText = isTBD 
-                ? "background: #ffebee; padding: 15px; border-radius: 6px; border: 1px solid #d32f2f; display: flex; flex-direction: column;"
-                : "background: #f9f9f9; padding: 15px; border-radius: 6px; border: 1px solid #eee; display: flex; flex-direction: column;";
+                ? "background: #ffebee; padding: 10px 15px; border-radius: 6px; border: 1px solid #d32f2f; display: flex; flex-direction: column;"
+                : "background: #f9f9f9; padding: 10px 15px; border-radius: 6px; border: 1px solid #eee; display: flex; flex-direction: column;";
             
-            // --- Text Styling ---
             const valueStyle = isTBD 
-                ? "font-size: 15px; color: #d32f2f; font-weight: 800; word-break: break-word;" 
-                : "font-size: 15px; color: #111; font-weight: 500; word-break: break-word;";
+                ? "font-size: 14px; color: #d32f2f; font-weight: 800; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #d32f2f;" 
+                : "font-size: 14px; color: #111; font-weight: 500; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #ccc;";
             
+            // Render an input field instead of a span, storing the original value in data-original
             item.innerHTML = `
                 <span style="font-size: 11px; color: #777; text-transform: uppercase; font-weight: bold; margin-bottom: 4px;" title="${attr.originalKey}">${attr.display}</span>
-                <span style="${valueStyle}">${rawValue}</span>
+                <input type="text" class="attr-input-field" data-key="${attr.originalKey}" data-original="${rawValue}" value="${rawValue}" style="${valueStyle}">
             `;
+            
+            // Listen for changes to show the Save button
+            const inputField = item.querySelector('input');
+            inputField.addEventListener('input', () => {
+                document.getElementById('attr-save-btn').style.display = 'block';
+            });
+            inputField.addEventListener('focus', () => {
+                inputField.style.borderBottomStyle = 'solid';
+                inputField.style.borderBottomColor = '#2e7d32';
+            });
+            inputField.addEventListener('blur', () => {
+                inputField.style.borderBottomStyle = 'dashed';
+                inputField.style.borderBottomColor = isTBD ? '#d32f2f' : '#ccc';
+            });
             
             groupGrid.appendChild(item);
         });
@@ -1898,6 +1909,92 @@ function displayAssetDetails(assetObj, assetName) {
         section.appendChild(groupGrid);
         container.appendChild(section);
     });
+}
+
+async function saveAttributeChanges(assetName) {
+    const btn = document.getElementById('attr-save-btn');
+    btn.innerText = "Saving...";
+    btn.disabled = true;
+
+    // 1. Scan all inputs to find what changed
+    const inputs = document.querySelectorAll('.attr-input-field');
+    const changes = [];
+
+    inputs.forEach(input => {
+        const originalVal = input.getAttribute('data-original');
+        const currentVal = input.value.trim();
+        const attributeKey = input.getAttribute('data-key');
+
+        if (originalVal !== currentVal) {
+            changes.push({
+                attribute: attributeKey,
+                newValue: currentVal
+            });
+        }
+    });
+
+    if (changes.length === 0) {
+        btn.innerText = "No Changes Detected";
+        setTimeout(() => {
+            btn.innerText = "Save Changes";
+            btn.style.display = 'none';
+            btn.disabled = false;
+        }, 2000);
+        return;
+    }
+
+    // 2. Send the payload to Google Apps Script
+    try {
+        const payload = {
+            action: 'saveAttributes',
+            assetName: assetName,
+            changes: changes
+        };
+
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            btn.innerText = "Saved Successfully!";
+            btn.style.background = "#1565c0"; // Turn blue to indicate success
+            
+            // Update the 'original' dataset so it doesn't trigger as a change again
+            inputs.forEach(input => {
+                input.setAttribute('data-original', input.value.trim());
+            });
+
+            // Update the local cached array so switching assets doesn't lose data
+            const cachedAsset = cachedAttributesData.find(a => (a['Asset Name'] || a['Asset']) === assetName);
+            if (cachedAsset) {
+                changes.forEach(change => {
+                    cachedAsset[change.attribute] = change.newValue;
+                });
+            }
+
+            setTimeout(() => {
+                btn.style.display = 'none';
+                btn.style.background = "#2e7d32"; // Revert to green
+                btn.innerText = "Save Changes";
+                btn.disabled = false;
+            }, 2500);
+
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        console.error("Error saving attributes:", error);
+        btn.innerText = "Error Saving";
+        btn.style.background = "#d32f2f";
+        setTimeout(() => {
+            btn.innerText = "Save Changes";
+            btn.style.background = "#2e7d32";
+            btn.disabled = false;
+        }, 3000);
+    }
 }
 
 function filterAssetDirectory() {

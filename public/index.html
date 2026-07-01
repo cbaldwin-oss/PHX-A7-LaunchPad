@@ -1688,7 +1688,8 @@ function switchMainView(viewType, btn) {
     const dash = document.getElementById('dashboard-view');
     const sched = document.getElementById('schedule-view');
     const equipmentView = document.getElementById('equipment-tracker-view'); 
-    const sett = document.getElementById('settings-view'); // May be null now
+    const sett = document.getElementById('settings-view'); 
+    const attrView = document.getElementById('attributes-view'); // <-- ADDED THIS
     
     // 2. Target the specific UI tools (Header buttons, Image, and Filter Sidebar)
     const schedControls = document.getElementById('schedule-header-controls');
@@ -1710,10 +1711,7 @@ function switchMainView(viewType, btn) {
     if (sett) sett.style.display = 'none';
     if (sched) sched.style.display = 'none';
     if (equipmentView) equipmentView.style.display = 'none';
-    
-    if (mainContent) mainContent.style.display = 'none';
-    if (subheader) subheader.style.display = 'none';
-    if (frozenBar) frozenBar.style.display = 'none';
+    if (attrView) attrView.style.display = 'none'; // <-- ADDED THIS
     
     // By default, hide schedule-specific tools and show the alternate image
     if (schedControls) schedControls.style.display = 'none';
@@ -1723,16 +1721,17 @@ function switchMainView(viewType, btn) {
     // Route view choice
     if (viewType === 'dashboard') {
         if (dash) dash.style.display = 'block';
-        if (appBody) appBody.style.width = 'calc(100% - 36px)'; // Stretches to right edge
+        if (appBody) appBody.style.width = 'calc(100% - 36px)'; 
     } else if (viewType === 'equipment') { 
         if (equipmentView) equipmentView.style.display = 'block'; 
-        if (appBody) appBody.style.width = 'calc(100% - 36px)'; // Stretches to right edge
+        if (appBody) appBody.style.width = 'calc(100% - 36px)'; 
     } else if (viewType === 'attributes') {
         if (attrView) {
             attrView.style.display = 'flex'; // Use flex for the side-by-side layout
-            if (!window.attributesLoaded) fetchAssetAttributes(); // Load data on first click automatically
+            // Load data on first click automatically
+            if (!window.attributesLoaded) fetchAssetAttributes(); 
         }
-        if (appBody) appBody.style.width = 'calc(100% - 36px)'; // Stretches to right edge
+        if (appBody) appBody.style.width = 'calc(100% - 36px)'; 
     } else {
         // IF VIEWING SCHEDULE: Bring back all schedule-specific elements
         if (schedControls) schedControls.style.display = 'flex';
@@ -1747,9 +1746,7 @@ function switchMainView(viewType, btn) {
         if (subheader) subheader.style.display = 'flex';
         if (frozenBar) frozenBar.style.display = 'flex';
     }
-    
 }
-
 // --- ASSET ATTRIBUTES LOGIC ---
 let cachedAttributesData = [];
 

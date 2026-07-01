@@ -1872,16 +1872,20 @@ function displayAssetDetails(assetObj, assetName) {
         
         groups[gName].forEach(attr => {
             const item = document.createElement('div');
-            item.style.cssText = "background: #f9f9f9; padding: 15px; border-radius: 6px; border: 1px solid #eee; display: flex; flex-direction: column;";
             
-            // Format the value - Check for TBD
             const rawValue = String(attr.value || "").trim();
             const isTBD = rawValue.toUpperCase() === 'TBD';
             
-            // Apply red and bold if TBD, otherwise standard styling
+            // --- NEW: Box Styling ---
+            // If TBD, apply light red background and solid red border. Otherwise, standard grey.
+            item.style.cssText = isTBD 
+                ? "background: #ffebee; padding: 15px; border-radius: 6px; border: 1px solid #d32f2f; display: flex; flex-direction: column;"
+                : "background: #f9f9f9; padding: 15px; border-radius: 6px; border: 1px solid #eee; display: flex; flex-direction: column;";
+            
+            // --- Text Styling ---
             const valueStyle = isTBD 
-                ? "font-size: 15px; color: #d32f2f; font-weight: 800; word-break: break-word;" // Red & Extra Bold
-                : "font-size: 15px; color: #111; font-weight: 500; word-break: break-word;"; // Standard
+                ? "font-size: 15px; color: #d32f2f; font-weight: 800; word-break: break-word;" 
+                : "font-size: 15px; color: #111; font-weight: 500; word-break: break-word;";
             
             item.innerHTML = `
                 <span style="font-size: 11px; color: #777; text-transform: uppercase; font-weight: bold; margin-bottom: 4px;" title="${attr.originalKey}">${attr.display}</span>

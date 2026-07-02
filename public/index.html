@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PHXA7 LaunchPad</title>
@@ -1817,17 +1818,39 @@ function displayAssetDetails(assetObj, assetName) {
     const card = document.getElementById('attr-details-card');
     card.style.display = 'block';
     
-    // Update title and add the Save Button next to it
+    // --- UPDATED: Add Scan Button & Group with Save Button ---
     document.getElementById('attr-title').innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <span>${assetName}</span>
-            <button id="attr-save-btn" onclick="saveAttributeChanges('${assetName}')" style="background: #2e7d32; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s; display: none;">Save Changes</button>
+            <div style="display: flex; gap: 10px;">
+                <button id="attr-scan-btn" onclick="startQRScanner()" style="background: #1976d2; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s;">📷 Scan QR</button>
+                <button id="attr-save-btn" onclick="saveAttributeChanges('${assetName}')" style="background: #2e7d32; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s; display: none;">Save Changes</button>
+            </div>
         </div>
     `;
     
     const container = document.getElementById('attr-grid');
     container.innerHTML = '';
     container.style.display = 'block'; 
+    
+    // --- NEW: Add the hidden camera container above the grid ---
+    let scannerDiv = document.getElementById('qr-reader-container');
+    if (!scannerDiv) {
+        scannerDiv = document.createElement('div');
+        scannerDiv.id = 'qr-reader-container';
+        scannerDiv.style.display = 'none';
+        scannerDiv.style.background = '#f8f9fa';
+        scannerDiv.style.border = '1px solid #ddd';
+        scannerDiv.style.borderRadius = '8px';
+        scannerDiv.style.padding = '15px';
+        scannerDiv.style.marginBottom = '25px';
+        card.insertBefore(scannerDiv, container);
+    } else {
+        scannerDiv.style.display = 'none'; // Ensure it's hidden when switching assets
+        if (window.html5QrcodeScanner) {
+            window.html5QrcodeScanner.clear().catch(e => console.log(e));
+        }
+    }
     
     const keys = Object.keys(assetObj).sort();
     const groups = {};
@@ -1909,6 +1932,90 @@ function displayAssetDetails(assetObj, assetName) {
         section.appendChild(groupGrid);
         container.appendChild(section);
     });
+}
+
+// ==========================================
+// QR CODE SCANNER LOGIC
+// ==========================================
+window.html5QrcodeScanner = null;
+
+function startQRScanner() {
+    const container = document.getElementById('qr-reader-container');
+    container.style.display = 'block';
+    
+    // Clear any existing instance
+    if (window.html5QrcodeScanner) {
+        window.html5QrcodeScanner.clear().catch(e => console.log("Scanner clear error", e));
+    }
+
+    // Set up the reader div
+    container.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin: 0; color: #1976d2;">Scan Equipment QR</h3>
+            <button onclick="stopQRScanner()" style="background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 4px 8px; cursor: pointer;">Cancel</button>
+        </div>
+        <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 0 auto; overflow: hidden; border-radius: 8px;"></div>
+    `;
+
+    // Initialize Scanner
+    window.html5QrcodeScanner = new Html5QrcodeScanner(
+        "qr-reader", 
+        { fps: 10, qrbox: {width: 250, height: 250} }, 
+        /* verbose= */ false
+    );
+    
+    window.html5QrcodeScanner.render(onScanSuccess);
+}
+
+function stopQRScanner() {
+    const container = document.getElementById('qr-reader-container');
+    container.style.display = 'none';
+    if (window.html5QrcodeScanner) {
+        window.html5QrcodeScanner.clear();
+    }
+}
+
+function onScanSuccess(decodedText) {
+    stopQRScanner();
+    
+    // Example URL: https://www.go2se.com/ref=HJL36060/sn=0202541276050003
+    const refMatch = decodedText.match(/ref=([^\/]+)/i);
+    const snMatch = decodedText.match(/sn=([^\/]+)/i);
+    
+    let fieldsUpdated = 0;
+
+    // 1. Map the Model (ref)
+    if (refMatch) {
+        const modelValue = refMatch[1];
+        // Smart search: Find any input whose data-key contains "Model" or "Ref"
+        const modelInput = document.querySelector('input[data-key*="Model" i]') || document.querySelector('input[data-key*="Ref" i]');
+        
+        if (modelInput) {
+            modelInput.value = modelValue;
+            modelInput.dispatchEvent(new Event('input')); // Force UI to register the change & show Save button
+            fieldsUpdated++;
+        }
+    }
+
+    // 2. Map the Serial Number (sn)
+    if (snMatch) {
+        const snValue = snMatch[1];
+        // Smart search: Find any input whose data-key contains "Serial" or "SN"
+        const snInput = document.querySelector('input[data-key*="Serial" i]') || document.querySelector('input[data-key*="SN" i]');
+        
+        if (snInput) {
+            snInput.value = snValue;
+            snInput.dispatchEvent(new Event('input')); // Force UI to register the change & show Save button
+            fieldsUpdated++;
+        }
+    }
+
+    // 3. User Feedback
+    if (fieldsUpdated > 0) {
+        alert(`Success! Auto-filled ${fieldsUpdated} field(s) from the QR code. Make sure to click "Save Changes".`);
+    } else {
+        alert("QR Code scanned successfully, but we couldn't find a matching 'Model' or 'Serial' attribute box to drop the data into.");
+    }
 }
 
 async function saveAttributeChanges(assetName) {

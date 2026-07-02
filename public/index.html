@@ -1140,6 +1140,22 @@ html, body {
             <button onclick="document.getElementById('schedule-config-modal').style.display='none'" style="padding: 8px 15px; cursor: pointer; background: #f1f3f4; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; color: #555;">Cancel</button>
             <button onclick="saveNewConfigOrder()" style="padding: 8px 15px; background: #2e7d32; color: white; cursor: pointer; border: none; border-radius: 4px; font-weight: bold;">Save & Reload</button>
         </div>
+        <div class="modal-box" style="width: 450px;">
+        <div class="modal-header">
+            <h2 id="scanner-modal-title">Scanner</h2>
+            <button class="close-btn" onclick="stopScanner()">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="scanner-mode-toggles" style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button onclick="initQRCodeScanner()" style="flex: 1; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🔳 Scan QR Code</button>
+                <button onclick="initTextScanner()" style="flex: 1; padding: 12px; background: #f57c00; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">📝 Scan Text</button>
+            </div>
+            
+            <div id="scanner-viewport" style="width: 100%; min-height: 200px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #f8f9fa; border: 1px dashed #ccc; border-radius: 8px; overflow: hidden;">
+                <p style="color: #666; font-size: 14px; text-align: center; padding: 20px;">Select a scan mode above to begin.</p>
+            </div>
+        </div>
+    </div>
     </div>
 </div>
     
@@ -1819,7 +1835,6 @@ function displayAssetDetails(assetObj, assetName) {
     const card = document.getElementById('attr-details-card');
     card.style.display = 'block';
     
-    // --- UPDATED: Removed global Scan Button, kept Save Button ---
     document.getElementById('attr-title').innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <span>${assetName}</span>
@@ -1830,25 +1845,6 @@ function displayAssetDetails(assetObj, assetName) {
     const container = document.getElementById('attr-grid');
     container.innerHTML = '';
     container.style.display = 'block'; 
-    
-    // The hidden camera container
-    let scannerDiv = document.getElementById('qr-reader-container');
-    if (!scannerDiv) {
-        scannerDiv = document.createElement('div');
-        scannerDiv.id = 'qr-reader-container';
-        scannerDiv.style.display = 'none';
-        scannerDiv.style.background = '#f8f9fa';
-        scannerDiv.style.border = '1px solid #ddd';
-        scannerDiv.style.borderRadius = '8px';
-        scannerDiv.style.padding = '15px';
-        scannerDiv.style.marginBottom = '25px';
-        card.insertBefore(scannerDiv, container);
-    } else {
-        scannerDiv.style.display = 'none'; 
-        if (window.html5QrcodeScanner) {
-            window.html5QrcodeScanner.clear().catch(e => console.log(e));
-        }
-    }
     
     const keys = Object.keys(assetObj).sort();
     const groups = {};
@@ -1937,50 +1933,50 @@ function displayAssetDetails(assetObj, assetName) {
 }
 
 // ==========================================
-// UNIFIED SCANNER LOGIC (QR + OCR)
+// UNIFIED SCANNER LOGIC (QR + TARGETED OCR)
 // ==========================================
 window.html5QrcodeScanner = null;
 window.currentScanTargetKey = null;
+window.ocrVideoStream = null;
 
 function startScanner(targetKey) {
     window.currentScanTargetKey = targetKey;
-    const container = document.getElementById('qr-reader-container');
-    container.style.display = 'block';
+    document.getElementById('scanner-modal-title').innerText = `Scan: ${targetKey}`;
+    document.getElementById('scanner-modal').classList.add('active');
     
-    if (window.html5QrcodeScanner) {
-        window.html5QrcodeScanner.clear().catch(e => console.log(e));
-    }
-
-    // Render the Mode Selection UI
-    container.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h3 style="margin: 0; color: #1976d2;">Scanning for: <span style="color:#333;">${targetKey}</span></h3>
-            <button onclick="stopScanner()" style="background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 4px 8px; cursor: pointer;">Cancel</button>
-        </div>
-        
-        <div id="scanner-mode-toggles" style="display: flex; gap: 10px; margin-bottom: 15px;">
-            <button onclick="initQRCodeScanner()" style="flex: 1; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🔳 Scan QR Code</button>
-            <button onclick="initTextScanner()" style="flex: 1; padding: 12px; background: #f57c00; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">📝 Scan Text</button>
-        </div>
-        
-        <div id="scanner-viewport" style="width: 100%; max-width: 400px; margin: 0 auto; overflow: hidden; border-radius: 8px;">
-            <p style="text-align: center; color: #666; font-size: 14px; padding: 20px;">Select a scan mode above to begin.</p>
-        </div>
+    // Reset UI to default mode prompt
+    document.getElementById('scanner-viewport').innerHTML = `
+        <p style="color: #666; font-size: 14px; text-align: center; padding: 20px;">Select a scan mode above to begin.</p>
     `;
+    document.getElementById('scanner-viewport').style.border = "1px dashed #ccc";
 }
 
 function stopScanner() {
-    const container = document.getElementById('qr-reader-container');
-    container.style.display = 'none';
+    document.getElementById('scanner-modal').classList.remove('active');
+    
+    // Shut down QR Scanner
     if (window.html5QrcodeScanner) {
-        window.html5QrcodeScanner.clear();
+        window.html5QrcodeScanner.clear().catch(e => console.log(e));
     }
+    
+    // Shut down Camera Video Stream
+    if (window.ocrVideoStream) {
+        window.ocrVideoStream.getTracks().forEach(track => track.stop());
+        window.ocrVideoStream = null;
+    }
+    
     window.currentScanTargetKey = null;
 }
 
 // --- MODE 1: QR CODE ---
 function initQRCodeScanner() {
+    if (window.ocrVideoStream) {
+        window.ocrVideoStream.getTracks().forEach(track => track.stop());
+        window.ocrVideoStream = null;
+    }
+
     const viewport = document.getElementById('scanner-viewport');
+    viewport.style.border = "none";
     viewport.innerHTML = `<div id="qr-reader" style="width: 100%;"></div>`;
 
     window.html5QrcodeScanner = new Html5QrcodeScanner(
@@ -1992,7 +1988,6 @@ function initQRCodeScanner() {
     window.html5QrcodeScanner.render((decodedText) => {
         let finalValue = decodedText;
 
-        // Smart Schneider Parsing
         const refMatch = decodedText.match(/ref=([^\/]+)/i);
         const snMatch = decodedText.match(/sn=([^\/]+)/i);
         
@@ -2004,65 +1999,102 @@ function initQRCodeScanner() {
                 finalValue = snMatch[1];
             }
         }
-        
         fillAttributeField(finalValue);
     });
 }
 
-// --- MODE 2: OCR TEXT ---
-function initTextScanner() {
+// --- MODE 2: CUSTOM TARGETED OCR ---
+async function initTextScanner() {
     if (window.html5QrcodeScanner) window.html5QrcodeScanner.clear();
 
     const viewport = document.getElementById('scanner-viewport');
+    viewport.style.border = "none";
     
-    // Uses native device camera API for a high-res still image (better for OCR than video frames)
+    // Render the custom video player with a darkened overlay and a transparent targeting box
     viewport.innerHTML = `
-        <div style="padding: 30px; text-align: center; background: #fff3e0; border: 1px solid #ffcc80; border-radius: 8px;">
-            <p style="margin-top: 0; color: #e65100; font-weight: bold; font-size: 16px;">Take a clear photo of the text</p>
-            <label style="background: #f57c00; color: white; padding: 12px 20px; border-radius: 6px; cursor: pointer; display: inline-block; font-weight: bold; font-size: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                📸 Open Camera
-                <input type="file" accept="image/*" capture="environment" style="display: none;" onchange="processOCRImage(event)">
-            </label>
-            <p style="font-size: 12px; color: #666; margin-bottom: 0;">Works best on high-contrast nameplates.</p>
+        <div style="position: relative; width: 100%; max-height: 350px; background: #000; overflow: hidden; border-radius: 8px; display: flex; align-items: center;">
+            <video id="ocr-video" autoplay playsinline style="width: 100%; height: auto;"></video>
+            
+            <div style="position: absolute; top: 50%; left: 10%; width: 80%; height: 60px; transform: translateY(-50%); border: 2px solid #00ff00; box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); pointer-events: none;"></div>
         </div>
-    `;
-}
-
-async function processOCRImage(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const viewport = document.getElementById('scanner-viewport');
-    viewport.innerHTML = `
-        <div style="padding: 30px; text-align: center; color: #e65100; font-weight: bold; background: #fff3e0; border-radius: 8px;">
-            <div style="font-size: 24px; margin-bottom: 10px;">⚙️</div>
-            <p id="ocr-status-text">Analyzing image...</p>
-            <p style="font-size: 11px; color: #666;">This may take a few seconds depending on your device.</p>
-        </div>
+        <button id="ocr-capture-btn" onclick="captureAndReadText()" style="width: 100%; margin-top: 15px; padding: 14px; background: #f57c00; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📸 Capture & Read Box</button>
+        <p id="ocr-status-text" style="text-align: center; font-size: 13px; color: #666; margin-top: 10px; min-height: 20px;">Align text inside the green box.</p>
     `;
 
     try {
-        const result = await Tesseract.recognize(file, 'eng', {
+        // Request access to the back camera
+        window.ocrVideoStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
+        });
+        document.getElementById('ocr-video').srcObject = window.ocrVideoStream;
+    } catch (err) {
+        console.error("Camera error:", err);
+        viewport.innerHTML = `<p style="color: #d32f2f; padding: 20px; text-align: center;">Camera access denied or unavailable. Please ensure permissions are granted.</p>`;
+    }
+}
+
+async function captureAndReadText() {
+    const video = document.getElementById('ocr-video');
+    const statusText = document.getElementById('ocr-status-text');
+    const captureBtn = document.getElementById('ocr-capture-btn');
+
+    if (!video || !video.videoWidth) return;
+
+    captureBtn.disabled = true;
+    captureBtn.innerText = "Analyzing image...";
+    statusText.innerHTML = "<strong>Freezing frame...</strong>";
+
+    // 1. Draw the raw video frame to a hidden canvas
+    const rawCanvas = document.createElement('canvas');
+    rawCanvas.width = video.videoWidth;
+    rawCanvas.height = video.videoHeight;
+    const rawCtx = rawCanvas.getContext('2d');
+    rawCtx.drawImage(video, 0, 0, rawCanvas.width, rawCanvas.height);
+
+    // 2. Calculate exactly where the green box is relative to the video resolution
+    const scale = video.videoWidth / video.clientWidth;
+    const cropWidth = video.clientWidth * 0.8 * scale;
+    const cropHeight = 60 * scale; 
+    const startX = video.clientWidth * 0.1 * scale;
+    const startY = ((video.clientHeight / 2) - 30) * scale;
+
+    // 3. Create a second canvas to store ONLY what was inside the green box
+    const cropCanvas = document.createElement('canvas');
+    cropCanvas.width = cropWidth;
+    cropCanvas.height = cropHeight;
+    const cropCtx = cropCanvas.getContext('2d');
+    
+    // Apply contrast/brightness filter to improve OCR accuracy
+    cropCtx.filter = 'contrast(1.4) brightness(1.1)';
+    cropCtx.drawImage(rawCanvas, startX, startY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+    // Stop the video stream so it freezes like a photo was taken
+    if (window.ocrVideoStream) {
+        window.ocrVideoStream.getTracks().forEach(track => track.stop());
+        window.ocrVideoStream = null;
+    }
+
+    try {
+        const result = await Tesseract.recognize(cropCanvas, 'eng', {
             logger: m => {
-                if(m.status === 'recognizing text') {
-                    const statusText = document.getElementById('ocr-status-text');
-                    if(statusText) statusText.innerText = `Reading Text: ${Math.round(m.progress * 100)}%`;
+                if (m.status === 'recognizing text') {
+                    statusText.innerHTML = `<span style="color: #1976d2;">Reading Text: ${Math.round(m.progress * 100)}%</span>`;
                 }
             }
         });
 
-        // Strip out excess newlines to fit cleanly into a single input box
+        // Strip out excess newlines to fit cleanly into the input box
         const extractedText = result.data.text.replace(/\n+/g, ' ').trim();
         
         if (extractedText) {
             fillAttributeField(extractedText);
         } else {
-            alert("We couldn't detect any legible text in that image. Please try again with better lighting or a closer angle.");
-            initTextScanner(); // Reset UI
+            alert("No legible text detected. Please ensure the text is well-lit and fits entirely inside the green box.");
+            initTextScanner(); // Restart camera
         }
     } catch (err) {
         console.error("OCR Error:", err);
-        alert("An error occurred while reading the image. Please try again.");
+        alert("An error occurred while reading the image.");
         initTextScanner();
     }
 }
@@ -2070,19 +2102,20 @@ async function processOCRImage(event) {
 // --- HELPER: INJECTS DATA INTO UI ---
 function fillAttributeField(value) {
     if (!window.currentScanTargetKey) return;
-    stopScanner();
+    
+    const targetKey = window.currentScanTargetKey;
+    stopScanner(); // Closes the modal and shuts down cameras
 
-    const inputField = document.querySelector(`input[data-key="${window.currentScanTargetKey}"]`);
+    const inputField = document.querySelector(`input[data-key="${targetKey}"]`);
     if (inputField) {
         inputField.value = value;
         
-        // Flash the background color slightly to show it updated
+        // Flash the background color to show it successfully dropped
         const parentBox = inputField.parentElement;
         const originalBg = parentBox.style.background;
         parentBox.style.background = '#e3f2fd';
         setTimeout(() => { parentBox.style.background = originalBg; }, 600);
         
-        // Force UI to register the change & show the Save button
         inputField.dispatchEvent(new Event('input')); 
     }
 }

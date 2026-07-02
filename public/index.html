@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PHXA7 LaunchPad</title>
@@ -1907,7 +1908,9 @@ function displayAssetDetails(assetObj, assetName) {
             item.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                     <span style="font-size: 11px; color: #777; text-transform: uppercase; font-weight: bold;" title="${attr.originalKey}">${attr.display}</span>
-                    <button onclick="startQRScanner('${safeKey}')" style="background: none; border: none; cursor: pointer; font-size: 14px; opacity: 0.7; transition: opacity 0.2s;" title="Scan QR for ${attr.display}" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">📷</button>
+                    <button onclick="startScanner('${safeKey}')" style="background: #e3f2fd; color: #1565c0; border: 1px solid #1565c0; cursor: pointer; font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 4px;" title="Scan Data for ${attr.display}" onmouseover="this.style.background='#1565c0'; this.style.color='white';" onmouseout="this.style.background='#e3f2fd'; this.style.color='#1565c0';">
+                        <span style="font-size: 12px;">📷</span> Scan
+                    </button>
                 </div>
                 <input type="text" class="attr-input-field" data-key="${attr.originalKey}" data-original="${rawValue}" value="${rawValue}" style="${valueStyle}">
             `;
@@ -1934,38 +1937,39 @@ function displayAssetDetails(assetObj, assetName) {
 }
 
 // ==========================================
-// QR CODE SCANNER LOGIC
+// UNIFIED SCANNER LOGIC (QR + OCR)
 // ==========================================
 window.html5QrcodeScanner = null;
-window.currentScanTargetKey = null; // Tracks which attribute we are scanning for
+window.currentScanTargetKey = null;
 
-function startQRScanner(targetKey) {
+function startScanner(targetKey) {
     window.currentScanTargetKey = targetKey;
     const container = document.getElementById('qr-reader-container');
     container.style.display = 'block';
     
     if (window.html5QrcodeScanner) {
-        window.html5QrcodeScanner.clear().catch(e => console.log("Scanner clear error", e));
+        window.html5QrcodeScanner.clear().catch(e => console.log(e));
     }
 
+    // Render the Mode Selection UI
     container.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3 style="margin: 0; color: #1976d2;">Scanning for: ${targetKey}</h3>
-            <button onclick="stopQRScanner()" style="background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 4px 8px; cursor: pointer;">Cancel</button>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3 style="margin: 0; color: #1976d2;">Scanning for: <span style="color:#333;">${targetKey}</span></h3>
+            <button onclick="stopScanner()" style="background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 4px 8px; cursor: pointer;">Cancel</button>
         </div>
-        <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 0 auto; overflow: hidden; border-radius: 8px;"></div>
+        
+        <div id="scanner-mode-toggles" style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <button onclick="initQRCodeScanner()" style="flex: 1; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🔳 Scan QR Code</button>
+            <button onclick="initTextScanner()" style="flex: 1; padding: 12px; background: #f57c00; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">📝 Scan Text</button>
+        </div>
+        
+        <div id="scanner-viewport" style="width: 100%; max-width: 400px; margin: 0 auto; overflow: hidden; border-radius: 8px;">
+            <p style="text-align: center; color: #666; font-size: 14px; padding: 20px;">Select a scan mode above to begin.</p>
+        </div>
     `;
-
-    window.html5QrcodeScanner = new Html5QrcodeScanner(
-        "qr-reader", 
-        { fps: 10, qrbox: {width: 250, height: 250} }, 
-        /* verbose= */ false
-    );
-    
-    window.html5QrcodeScanner.render(onScanSuccess);
 }
 
-function stopQRScanner() {
+function stopScanner() {
     const container = document.getElementById('qr-reader-container');
     container.style.display = 'none';
     if (window.html5QrcodeScanner) {
@@ -1974,31 +1978,103 @@ function stopQRScanner() {
     window.currentScanTargetKey = null;
 }
 
-function onScanSuccess(decodedText) {
-    stopQRScanner();
-    
-    if (!window.currentScanTargetKey) return;
+// --- MODE 1: QR CODE ---
+function initQRCodeScanner() {
+    const viewport = document.getElementById('scanner-viewport');
+    viewport.innerHTML = `<div id="qr-reader" style="width: 100%;"></div>`;
 
-    let finalValue = decodedText; // Default to dumping the exact barcode string
-
-    // Smart Parsing: If it is a Schneider URL, pull the specific data out
-    const refMatch = decodedText.match(/ref=([^\/]+)/i);
-    const snMatch = decodedText.match(/sn=([^\/]+)/i);
+    window.html5QrcodeScanner = new Html5QrcodeScanner(
+        "qr-reader", 
+        { fps: 10, qrbox: {width: 250, height: 250} }, 
+        false
+    );
     
-    if (refMatch || snMatch) {
-        const targetLower = window.currentScanTargetKey.toLowerCase();
+    window.html5QrcodeScanner.render((decodedText) => {
+        let finalValue = decodedText;
+
+        // Smart Schneider Parsing
+        const refMatch = decodedText.match(/ref=([^\/]+)/i);
+        const snMatch = decodedText.match(/sn=([^\/]+)/i);
         
-        if (targetLower.includes('model') || targetLower.includes('ref')) {
-            if (refMatch) finalValue = refMatch[1];
-        } else if (targetLower.includes('serial') || targetLower.includes('sn')) {
-            if (snMatch) finalValue = snMatch[1];
+        if (refMatch || snMatch) {
+            const targetLower = window.currentScanTargetKey.toLowerCase();
+            if ((targetLower.includes('model') || targetLower.includes('ref')) && refMatch) {
+                finalValue = refMatch[1];
+            } else if ((targetLower.includes('serial') || targetLower.includes('sn')) && snMatch) {
+                finalValue = snMatch[1];
+            }
         }
-    }
+        
+        fillAttributeField(finalValue);
+    });
+}
 
-    // Find the targeted input box and inject the data
+// --- MODE 2: OCR TEXT ---
+function initTextScanner() {
+    if (window.html5QrcodeScanner) window.html5QrcodeScanner.clear();
+
+    const viewport = document.getElementById('scanner-viewport');
+    
+    // Uses native device camera API for a high-res still image (better for OCR than video frames)
+    viewport.innerHTML = `
+        <div style="padding: 30px; text-align: center; background: #fff3e0; border: 1px solid #ffcc80; border-radius: 8px;">
+            <p style="margin-top: 0; color: #e65100; font-weight: bold; font-size: 16px;">Take a clear photo of the text</p>
+            <label style="background: #f57c00; color: white; padding: 12px 20px; border-radius: 6px; cursor: pointer; display: inline-block; font-weight: bold; font-size: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                📸 Open Camera
+                <input type="file" accept="image/*" capture="environment" style="display: none;" onchange="processOCRImage(event)">
+            </label>
+            <p style="font-size: 12px; color: #666; margin-bottom: 0;">Works best on high-contrast nameplates.</p>
+        </div>
+    `;
+}
+
+async function processOCRImage(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const viewport = document.getElementById('scanner-viewport');
+    viewport.innerHTML = `
+        <div style="padding: 30px; text-align: center; color: #e65100; font-weight: bold; background: #fff3e0; border-radius: 8px;">
+            <div style="font-size: 24px; margin-bottom: 10px;">⚙️</div>
+            <p id="ocr-status-text">Analyzing image...</p>
+            <p style="font-size: 11px; color: #666;">This may take a few seconds depending on your device.</p>
+        </div>
+    `;
+
+    try {
+        const result = await Tesseract.recognize(file, 'eng', {
+            logger: m => {
+                if(m.status === 'recognizing text') {
+                    const statusText = document.getElementById('ocr-status-text');
+                    if(statusText) statusText.innerText = `Reading Text: ${Math.round(m.progress * 100)}%`;
+                }
+            }
+        });
+
+        // Strip out excess newlines to fit cleanly into a single input box
+        const extractedText = result.data.text.replace(/\n+/g, ' ').trim();
+        
+        if (extractedText) {
+            fillAttributeField(extractedText);
+        } else {
+            alert("We couldn't detect any legible text in that image. Please try again with better lighting or a closer angle.");
+            initTextScanner(); // Reset UI
+        }
+    } catch (err) {
+        console.error("OCR Error:", err);
+        alert("An error occurred while reading the image. Please try again.");
+        initTextScanner();
+    }
+}
+
+// --- HELPER: INJECTS DATA INTO UI ---
+function fillAttributeField(value) {
+    if (!window.currentScanTargetKey) return;
+    stopScanner();
+
     const inputField = document.querySelector(`input[data-key="${window.currentScanTargetKey}"]`);
     if (inputField) {
-        inputField.value = finalValue;
+        inputField.value = value;
         
         // Flash the background color slightly to show it updated
         const parentBox = inputField.parentElement;
@@ -2009,8 +2085,6 @@ function onScanSuccess(decodedText) {
         // Force UI to register the change & show the Save button
         inputField.dispatchEvent(new Event('input')); 
     }
-    
-    window.currentScanTargetKey = null;
 }
 
 async function saveAttributeChanges(assetName) {

@@ -1937,8 +1937,8 @@ function displayAssetDetails(assetObj, assetName) {
 // ==========================================
 // UNIFIED SCANNER LOGIC (QR + TARGETED OCR)
 // ==========================================
-window.html5QrcodeScanner = null; // Old UI version (can be phased out)
-window.html5Qrcode = null;        // NEW: Core engine for auto-start QR
+window.html5QrcodeScanner = null;
+window.html5Qrcode = null;
 window.currentScanTargetKey = null;
 window.ocrVideoStream = null;
 
@@ -1960,7 +1960,6 @@ function stopScanner() {
         window.html5QrcodeScanner.clear().catch(e => console.log(e));
     }
     
-    // Shut down the new Core QR engine
     if (window.html5Qrcode) {
         window.html5Qrcode.stop().then(() => {
             window.html5Qrcode.clear();
@@ -1976,9 +1975,8 @@ function stopScanner() {
     window.currentScanTargetKey = null;
 }
 
-// --- MODE 1: AUTO-START QR CODE ---
+// --- MODE 1: AUTO-START QR CODE (WITH SMART CONTEXT) ---
 function initQRCodeScanner() {
-    // Stop OCR camera if active
     if (window.ocrVideoStream) {
         window.ocrVideoStream.getTracks().forEach(track => track.stop());
         window.ocrVideoStream = null;
@@ -1991,47 +1989,75 @@ function initQRCodeScanner() {
         <p style="text-align: center; font-size: 13px; color: #666; margin-top: 10px;">Align QR code inside the box.</p>
     `;
 
-    // Initialize the core engine instead of the generic UI
     window.html5Qrcode = new Html5Qrcode("qr-reader");
 
-    // Start instantly using the rear camera
     window.html5Qrcode.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
-            // ON SUCCESS: 
-            let finalValue = decodedText;
-
             const refMatch = decodedText.match(/ref=([^\/]+)/i);
             const snMatch = decodedText.match(/sn=([^\/]+)/i);
             
             if (refMatch || snMatch) {
-                const targetLower = window.currentScanTargetKey.toLowerCase();
-                if ((targetLower.includes('model') || targetLower.includes('ref')) && refMatch) {
-                    finalValue = refMatch[1];
-                } else if ((targetLower.includes('serial') || targetLower.includes('sn')) && snMatch) {
-                    finalValue = snMatch[1];
+                // 1. Identify the common group prefix (e.g. "Breaker" vs "Trip Unit")
+                let groupContext = "";
+                const targetKey = window.currentScanTargetKey;
+                
+                if (targetKey.includes(':')) {
+                    groupContext = targetKey.split(':')[0].trim().toLowerCase();
+                } else {
+                    // Strip specific identifiers to find the base group name
+                    groupContext = targetKey.toLowerCase().replace(/serial|sn|s\/n|model|ref|number|#/g, '').trim();
+                }
+
+                // 2. Search for sibling inputs in the exact same group context
+                const findInput = (typeWords) => {
+                    const inputs = document.querySelectorAll('.attr-input-field');
+                    for (let input of inputs) {
+                        const key = input.getAttribute('data-key').toLowerCase();
+                        if (key.includes(groupContext) && typeWords.some(w => key.includes(w))) {
+                            return input;
+                        }
+                    }
+                    return null;
+                };
+
+                const modelInput = findInput(['model', 'ref']);
+                const serialInput = findInput(['serial', 's/n', 'sn']);
+                
+                let smartFilled = false;
+                
+                // 3. Inject data into matching sibling boxes
+                if (refMatch && modelInput) {
+                    injectDataIntoInput(modelInput, refMatch[1]);
+                    smartFilled = true;
+                }
+                if (snMatch && serialInput) {
+                    injectDataIntoInput(serialInput, snMatch[1]);
+                    smartFilled = true;
+                }
+                
+                // If it successfully filled multiple context boxes, close the scanner and finish
+                if (smartFilled) {
+                    stopScanner();
+                    return; 
                 }
             }
             
-            // Stop scanning and inject the data
-            fillAttributeField(finalValue);
+            // 4. Fallback: If it's just raw text or the smart match failed, dump it into the single clicked box
+            fillAttributeField(decodedText, refMatch, snMatch);
         },
-        (errorMessage) => {
-            // Ignore standard scanning errors (it fires this every frame it doesn't see a QR code)
-        }
+        (errorMessage) => { /* ignore frame errors */ }
     ).catch((err) => {
         console.error("Camera access error:", err);
-        viewport.innerHTML = `<p style="color: #d32f2f; padding: 20px; text-align: center;">Camera access denied or unavailable. Please ensure permissions are granted.</p>`;
+        viewport.innerHTML = `<p style="color: #d32f2f; padding: 20px; text-align: center;">Camera access denied or unavailable.</p>`;
     });
 }
 
 // --- MODE 2: CUSTOM TARGETED OCR ---
 async function initTextScanner() {
-    // Stop generic UI Scanner
     if (window.html5QrcodeScanner) window.html5QrcodeScanner.clear();
     
-    // Stop new Core Engine Scanner
     if (window.html5Qrcode) {
         window.html5Qrcode.stop().then(() => {
             window.html5Qrcode.clear();
@@ -2058,7 +2084,7 @@ async function initTextScanner() {
         document.getElementById('ocr-video').srcObject = window.ocrVideoStream;
     } catch (err) {
         console.error("Camera error:", err);
-        viewport.innerHTML = `<p style="color: #d32f2f; padding: 20px; text-align: center;">Camera access denied or unavailable. Please ensure permissions are granted.</p>`;
+        viewport.innerHTML = `<p style="color: #d32f2f; padding: 20px; text-align: center;">Camera access denied or unavailable.</p>`;
     }
 }
 
@@ -2073,31 +2099,26 @@ async function captureAndReadText() {
     captureBtn.innerText = "Analyzing image...";
     statusText.innerHTML = "<strong>Freezing frame...</strong>";
 
-    // 1. Draw the raw video frame to a hidden canvas
     const rawCanvas = document.createElement('canvas');
     rawCanvas.width = video.videoWidth;
     rawCanvas.height = video.videoHeight;
     const rawCtx = rawCanvas.getContext('2d');
     rawCtx.drawImage(video, 0, 0, rawCanvas.width, rawCanvas.height);
 
-    // 2. Calculate exactly where the green box is relative to the video resolution
     const scale = video.videoWidth / video.clientWidth;
     const cropWidth = video.clientWidth * 0.8 * scale;
     const cropHeight = 60 * scale; 
     const startX = video.clientWidth * 0.1 * scale;
     const startY = ((video.clientHeight / 2) - 30) * scale;
 
-    // 3. Create a second canvas to store ONLY what was inside the green box
     const cropCanvas = document.createElement('canvas');
     cropCanvas.width = cropWidth;
     cropCanvas.height = cropHeight;
     const cropCtx = cropCanvas.getContext('2d');
     
-    // Apply contrast/brightness filter to improve OCR accuracy
     cropCtx.filter = 'contrast(1.4) brightness(1.1)';
     cropCtx.drawImage(rawCanvas, startX, startY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
 
-    // Stop the video stream so it freezes like a photo was taken
     if (window.ocrVideoStream) {
         window.ocrVideoStream.getTracks().forEach(track => track.stop());
         window.ocrVideoStream = null;
@@ -2112,14 +2133,13 @@ async function captureAndReadText() {
             }
         });
 
-        // Strip out excess newlines to fit cleanly into the input box
         const extractedText = result.data.text.replace(/\n+/g, ' ').trim();
         
         if (extractedText) {
             fillAttributeField(extractedText);
         } else {
             alert("No legible text detected. Please ensure the text is well-lit and fits entirely inside the green box.");
-            initTextScanner(); // Restart camera
+            initTextScanner(); 
         }
     } catch (err) {
         console.error("OCR Error:", err);
@@ -2128,24 +2148,39 @@ async function captureAndReadText() {
     }
 }
 
-// --- HELPER: INJECTS DATA INTO UI ---
-function fillAttributeField(value) {
+// --- HELPER: FLASHES UI AND INJECTS DATA ---
+function injectDataIntoInput(inputField, value) {
+    inputField.value = value;
+    
+    const parentBox = inputField.parentElement;
+    const originalBg = parentBox.style.background;
+    parentBox.style.background = '#e3f2fd'; // Flash light blue to indicate success
+    setTimeout(() => { parentBox.style.background = originalBg; }, 600);
+    
+    inputField.dispatchEvent(new Event('input')); 
+}
+
+// --- HELPER: FALLBACK FOR SINGLE TARGET ---
+function fillAttributeField(decodedText, refMatch = null, snMatch = null) {
     if (!window.currentScanTargetKey) return;
     
+    let finalValue = decodedText;
+    
+    if (refMatch || snMatch) {
+        const targetLower = window.currentScanTargetKey.toLowerCase();
+        if ((targetLower.includes('model') || targetLower.includes('ref')) && refMatch) {
+            finalValue = refMatch[1];
+        } else if ((targetLower.includes('serial') || targetLower.includes('sn')) && snMatch) {
+            finalValue = snMatch[1];
+        }
+    }
+    
     const targetKey = window.currentScanTargetKey;
-    stopScanner(); // Closes the modal and shuts down cameras
+    stopScanner(); 
 
     const inputField = document.querySelector(`input[data-key="${targetKey}"]`);
     if (inputField) {
-        inputField.value = value;
-        
-        // Flash the background color to show it successfully dropped
-        const parentBox = inputField.parentElement;
-        const originalBg = parentBox.style.background;
-        parentBox.style.background = '#e3f2fd';
-        setTimeout(() => { parentBox.style.background = originalBg; }, 600);
-        
-        inputField.dispatchEvent(new Event('input')); 
+        injectDataIntoInput(inputField, finalValue);
     }
 }
 

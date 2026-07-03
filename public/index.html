@@ -1999,23 +1999,28 @@ function initQRCodeScanner() {
             const snMatch = decodedText.match(/sn=([^\/]+)/i);
             
             if (refMatch || snMatch) {
-                // 1. Identify the common group prefix (e.g. "Breaker" vs "Trip Unit")
+                // 1. Identify the common group prefix using the FIRST WORD
                 let groupContext = "";
                 const targetKey = window.currentScanTargetKey;
                 
                 if (targetKey.includes(':')) {
+                    // If it uses the strict "Group: Attribute" syntax
                     groupContext = targetKey.split(':')[0].trim().toLowerCase();
                 } else {
-                    // Strip specific identifiers to find the base group name
-                    groupContext = targetKey.toLowerCase().replace(/serial|sn|s\/n|model|ref|number|#/g, '').trim();
+                    // Otherwise, pull exactly the first word of the clicked attribute
+                    // e.g., "Breaker Serial Number" -> "breaker", "Trip Unit Model" -> "trip"
+                    groupContext = targetKey.trim().split(/\s+/)[0].toLowerCase();
                 }
 
-                // 2. Search for sibling inputs in the exact same group context
+                // 2. Search for sibling inputs that share that exact same first word context
                 const findInput = (typeWords) => {
                     const inputs = document.querySelectorAll('.attr-input-field');
                     for (let input of inputs) {
                         const key = input.getAttribute('data-key').toLowerCase();
-                        if (key.includes(groupContext) && typeWords.some(w => key.includes(w))) {
+                        
+                        // Check if the input's key contains the target word (Model/Serial) 
+                        // AND starts with the same context word (Breaker/Trip)
+                        if (key.startsWith(groupContext) && typeWords.some(w => key.includes(w))) {
                             return input;
                         }
                     }

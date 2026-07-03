@@ -1937,18 +1937,16 @@ function displayAssetDetails(assetObj, assetName) {
 // ==========================================
 // UNIFIED SCANNER LOGIC (QR + TARGETED OCR)
 // ==========================================
-window.html5QrcodeScanner = null;
+window.html5QrcodeScanner = null; // Old UI version (can be phased out)
+window.html5Qrcode = null;        // NEW: Core engine for auto-start QR
 window.currentScanTargetKey = null;
 window.ocrVideoStream = null;
 
 function startScanner(targetKey) {
     window.currentScanTargetKey = targetKey;
     document.getElementById('scanner-modal-title').innerText = `Scan: ${targetKey}`;
-    
-    // THE FIX: explicitly set display to 'flex'
     document.getElementById('scanner-modal').style.display = 'flex'; 
     
-    // Reset UI to default mode prompt
     document.getElementById('scanner-viewport').innerHTML = `
         <p style="color: #666; font-size: 14px; text-align: center; padding: 20px;">Select a scan mode above to begin.</p>
     `;
@@ -1956,15 +1954,20 @@ function startScanner(targetKey) {
 }
 
 function stopScanner() {
-    // THE FIX: explicitly set display to 'none'
     document.getElementById('scanner-modal').style.display = 'none';
     
-    // Shut down QR Scanner
     if (window.html5QrcodeScanner) {
         window.html5QrcodeScanner.clear().catch(e => console.log(e));
     }
     
-    // Shut down Camera Video Stream
+    // Shut down the new Core QR engine
+    if (window.html5Qrcode) {
+        window.html5Qrcode.stop().then(() => {
+            window.html5Qrcode.clear();
+            window.html5Qrcode = null;
+        }).catch(e => console.log(e));
+    }
+    
     if (window.ocrVideoStream) {
         window.ocrVideoStream.getTracks().forEach(track => track.stop());
         window.ocrVideoStream = null;
@@ -1973,53 +1976,75 @@ function stopScanner() {
     window.currentScanTargetKey = null;
 }
 
-// --- MODE 1: QR CODE ---
+// --- MODE 1: AUTO-START QR CODE ---
 function initQRCodeScanner() {
+    // Stop OCR camera if active
     if (window.ocrVideoStream) {
         window.ocrVideoStream.getTracks().forEach(track => track.stop());
         window.ocrVideoStream = null;
     }
-
+    
     const viewport = document.getElementById('scanner-viewport');
     viewport.style.border = "none";
-    viewport.innerHTML = `<div id="qr-reader" style="width: 100%;"></div>`;
+    viewport.innerHTML = `
+        <div id="qr-reader" style="width: 100%; border-radius: 8px; overflow: hidden; background: #000; min-height: 250px;"></div>
+        <p style="text-align: center; font-size: 13px; color: #666; margin-top: 10px;">Align QR code inside the box.</p>
+    `;
 
-    window.html5QrcodeScanner = new Html5QrcodeScanner(
-        "qr-reader", 
-        { fps: 10, qrbox: {width: 250, height: 250} }, 
-        false
-    );
-    
-    window.html5QrcodeScanner.render((decodedText) => {
-        let finalValue = decodedText;
+    // Initialize the core engine instead of the generic UI
+    window.html5Qrcode = new Html5Qrcode("qr-reader");
 
-        const refMatch = decodedText.match(/ref=([^\/]+)/i);
-        const snMatch = decodedText.match(/sn=([^\/]+)/i);
-        
-        if (refMatch || snMatch) {
-            const targetLower = window.currentScanTargetKey.toLowerCase();
-            if ((targetLower.includes('model') || targetLower.includes('ref')) && refMatch) {
-                finalValue = refMatch[1];
-            } else if ((targetLower.includes('serial') || targetLower.includes('sn')) && snMatch) {
-                finalValue = snMatch[1];
+    // Start instantly using the rear camera
+    window.html5Qrcode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+            // ON SUCCESS: 
+            let finalValue = decodedText;
+
+            const refMatch = decodedText.match(/ref=([^\/]+)/i);
+            const snMatch = decodedText.match(/sn=([^\/]+)/i);
+            
+            if (refMatch || snMatch) {
+                const targetLower = window.currentScanTargetKey.toLowerCase();
+                if ((targetLower.includes('model') || targetLower.includes('ref')) && refMatch) {
+                    finalValue = refMatch[1];
+                } else if ((targetLower.includes('serial') || targetLower.includes('sn')) && snMatch) {
+                    finalValue = snMatch[1];
+                }
             }
+            
+            // Stop scanning and inject the data
+            fillAttributeField(finalValue);
+        },
+        (errorMessage) => {
+            // Ignore standard scanning errors (it fires this every frame it doesn't see a QR code)
         }
-        fillAttributeField(finalValue);
+    ).catch((err) => {
+        console.error("Camera access error:", err);
+        viewport.innerHTML = `<p style="color: #d32f2f; padding: 20px; text-align: center;">Camera access denied or unavailable. Please ensure permissions are granted.</p>`;
     });
 }
 
 // --- MODE 2: CUSTOM TARGETED OCR ---
 async function initTextScanner() {
+    // Stop generic UI Scanner
     if (window.html5QrcodeScanner) window.html5QrcodeScanner.clear();
+    
+    // Stop new Core Engine Scanner
+    if (window.html5Qrcode) {
+        window.html5Qrcode.stop().then(() => {
+            window.html5Qrcode.clear();
+            window.html5Qrcode = null;
+        }).catch(e => console.log(e));
+    }
 
     const viewport = document.getElementById('scanner-viewport');
     viewport.style.border = "none";
     
-    // Render the custom video player with a darkened overlay and a transparent targeting box
     viewport.innerHTML = `
         <div style="position: relative; width: 100%; max-height: 350px; background: #000; overflow: hidden; border-radius: 8px; display: flex; align-items: center;">
             <video id="ocr-video" autoplay playsinline style="width: 100%; height: auto;"></video>
-            
             <div style="position: absolute; top: 50%; left: 10%; width: 80%; height: 60px; transform: translateY(-50%); border: 2px solid #00ff00; box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); pointer-events: none;"></div>
         </div>
         <button id="ocr-capture-btn" onclick="captureAndReadText()" style="width: 100%; margin-top: 15px; padding: 14px; background: #f57c00; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📸 Capture & Read Box</button>
@@ -2027,7 +2052,6 @@ async function initTextScanner() {
     `;
 
     try {
-        // Request access to the back camera
         window.ocrVideoStream = await navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
         });

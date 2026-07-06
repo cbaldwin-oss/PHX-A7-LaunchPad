@@ -3942,7 +3942,7 @@ function openMultiSelectMenu(cellElement, rowNum, dayLabel) {
     
     const opts = (window.dropdownData?.col6) || [];
     let currentContent = cellElement.getAttribute('data-selected') || "";
-    let items = currentContent ? currentContent.split(', ').filter(x => x) : [];
+    let items = currentContent ? currentContent.split(',').map(x => x.trim()).filter(x => x) : [];
     
     // Generate Checkboxes
     opts.forEach(opt => {

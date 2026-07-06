@@ -2404,7 +2404,7 @@ async function loadPhaseRules() {
 
     try {
         // Uses your existing GOOGLE_SHEET_URL
-        const response = await fetch(`${GOOGLE_SHEET_URL}?action=getPhaseRules`);
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getPhaseRules`);
         const data = await response.json();
 
         if (data.status === 'success' && data.data.length > 0) {

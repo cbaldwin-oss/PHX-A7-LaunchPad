@@ -1118,14 +1118,14 @@ html, body {
 
 <div id="app-body">
     
-   <div class="modal-overlay" id="schedule-config-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
-    <div style="background: white; width: 900px; max-height: 90vh; overflow-y: auto; padding: 30px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);"> 
+<div class="modal-overlay" id="schedule-config-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background: white; width: 1100px; max-height: 90vh; overflow-y: auto; padding: 30px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);"> 
         
-        <div style="display: flex; gap: 30px;">
+        <div style="display: flex; gap: 30px; margin-bottom: 30px;">
             <div style="flex: 1;">
                 <h2 style="margin-top:0; color: #333;">Schedule Layout</h2>
                 <p style="font-size:12px; color:#666;">Drag to reorder, check to show/hide, or click a name to edit.</p>
-                <div id="schedule-col-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
+                <div id="schedule-col-list" style="display: flex; flex-direction: column; gap: 8px;">
                     </div>
             </div>
 
@@ -1136,9 +1136,32 @@ html, body {
             </div>
         </div>
 
-        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #eee; padding-top: 20px; margin-top: 10px;">
+        <div style="border-top: 1px solid #ddd; padding-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 style="color: #333; margin: 0;">Phase Rules LP</h2>
+                    <p style="font-size:12px; color:#666;">Read and Write directly to your Google Sheet.</p>
+                </div>
+                <button onclick="loadPhaseRules()" style="padding: 6px 12px; background: #0c44fa; color: white; border: none; border-radius: 4px; cursor: pointer;">🔄 Refresh Rules</button>
+            </div>
+            
+            <div style="overflow-x: auto; margin-top: 15px; border: 1px solid #eee; max-height: 300px; overflow-y: auto;">
+                <table id="phase-rules-table" style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+                    <thead style="background: #f1f3f4; position: sticky; top: 0;">
+                        <tr id="phase-rules-header">
+                            <th style="padding: 8px;">Loading...</th>
+                        </tr>
+                    </thead>
+                    <tbody id="phase-rules-body">
+                    </tbody>
+                </table>
+            </div>
+            <button onclick="addPhaseRuleRow()" style="margin-top: 10px; padding: 5px 10px; cursor: pointer; border: 1px dashed #2e7d32; background: white; color: #2e7d32;">+ Add Rule</button>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #eee; padding-top: 20px; margin-top: 20px;">
             <button onclick="document.getElementById('schedule-config-modal').style.display='none'" style="padding: 8px 15px; cursor: pointer; background: #f1f3f4; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; color: #555;">Cancel</button>
-            <button onclick="saveNewConfigOrder()" style="padding: 8px 15px; background: #2e7d32; color: white; cursor: pointer; border: none; border-radius: 4px; font-weight: bold;">Save & Reload</button>
+            <button onclick="saveNewConfigOrder(); savePhaseRules();" style="padding: 8px 15px; background: #2e7d32; color: white; cursor: pointer; border: none; border-radius: 4px; font-weight: bold;">Save All Settings</button>
         </div>
     </div>
 </div>
@@ -2369,6 +2392,70 @@ function toggleFilterArray(val, arr) {
     
     renderSidebarFilters(); // Update UI colors
     autoCleanUI();          // Run the visibility logic
+}
+
+let currentPhaseRulesHeaders = [];
+
+async function loadPhaseRules() {
+    const tableHead = document.getElementById('phase-rules-header');
+    const tableBody = document.getElementById('phase-rules-body');
+    tableHead.innerHTML = '<th style="padding: 8px;">Fetching data from Google Sheets...</th>';
+    tableBody.innerHTML = '';
+
+    try {
+        // Uses your existing GOOGLE_SHEET_URL
+        const response = await fetch(`${GOOGLE_SHEET_URL}?action=getPhaseRules`);
+        const data = await response.json();
+
+        if (data.status === 'success' && data.data.length > 0) {
+            currentPhaseRulesHeaders = data.data[0]; // First row is headers
+            
+            // Build Headers
+            tableHead.innerHTML = currentPhaseRulesHeaders.map(h => `<th style="padding: 8px; border: 1px solid #ddd;">${h}</th>`).join('') + '<th style="padding: 8px; border: 1px solid #ddd;">🗑️</th>';
+            
+            // Build Rows
+            data.data.slice(1).forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = currentPhaseRulesHeaders.map((h, i) => 
+                    `<td style="padding: 4px; border: 1px solid #ddd;"><input type="text" value="${row[i] || ''}" style="width: 100%; border: none; outline: none; background: transparent;"></td>`
+                ).join('') + `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;"><span style="cursor:pointer; color:red;" onclick="this.closest('tr').remove()">X</span></td>`;
+                tableBody.appendChild(tr);
+            });
+        }
+    } catch (error) {
+        tableHead.innerHTML = '<th style="padding: 8px; color: red;">Failed to load rules. Check Apps Script URL.</th>';
+    }
+}
+
+function addPhaseRuleRow() {
+    if (currentPhaseRulesHeaders.length === 0) return alert("Please wait for rules to load first.");
+    const tr = document.createElement('tr');
+    tr.innerHTML = currentPhaseRulesHeaders.map(h => 
+        `<td style="padding: 4px; border: 1px solid #ddd;"><input type="text" value="" style="width: 100%; border: none; outline: none; background: transparent;"></td>`
+    ).join('') + `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;"><span style="cursor:pointer; color:red;" onclick="this.closest('tr').remove()">X</span></td>`;
+    document.getElementById('phase-rules-body').appendChild(tr);
+}
+
+async function savePhaseRules() {
+    const tableBody = document.getElementById('phase-rules-body');
+    if (!tableBody.children.length) return;
+
+    const rows = [currentPhaseRulesHeaders]; // Start with headers
+    Array.from(tableBody.children).forEach(tr => {
+        const inputs = tr.querySelectorAll('input');
+        const rowData = Array.from(inputs).map(input => input.value);
+        rows.push(rowData);
+    });
+
+    try {
+        await fetch(GOOGLE_SHEET_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'setPhaseRules', data: rows })
+        });
+        console.log("Phase Rules saved successfully to Google Sheets!");
+    } catch (e) {
+        console.error("Failed to save Phase Rules:", e);
+    }
 }
 
 function renderPlacesFilterButtons() {

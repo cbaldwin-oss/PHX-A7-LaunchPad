@@ -2448,9 +2448,10 @@ async function savePhaseRules() {
     });
 
     try {
-        await fetch(GOOGLE_SHEET_URL, {
+        await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
-            body: JSON.stringify({ action: 'setPhaseRules', data: rows })
+            body: JSON.stringify({ action: 'setPhaseRules', data: rows }),
+            mode: 'no-cors' // Added no-cors to prevent browser blocking on saves
         });
         console.log("Phase Rules saved successfully to Google Sheets!");
     } catch (e) {

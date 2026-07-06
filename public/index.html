@@ -2424,7 +2424,7 @@ async function loadPhaseRules() {
                     if (booleanPhaseHeaders.includes(h.trim())) {
                         const isChecked = (row[i] === true || row[i] === 'TRUE' || row[i] === 'true') ? 'checked' : '';
                         return `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;">
-                                    <input type="checkbox" ${isChecked} style="transform: scale(1.2); cursor: pointer;" data-type="boolean">
+                                    <input type="checkbox" ${isChecked} style="width: 16px; height: 16px; margin: 0; cursor: pointer; position: relative; z-index: 0;" data-type="boolean">
                                 </td>`;
                     } else {
                         return `<td style="padding: 4px; border: 1px solid #ddd;">
@@ -2447,7 +2447,7 @@ function addPhaseRuleRow() {
         // NEW: Ensure new rows also render checkboxes for those specific columns
         if (booleanPhaseHeaders.includes(h.trim())) {
             return `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;">
-                        <input type="checkbox" checked style="transform: scale(1.2); cursor: pointer;" data-type="boolean">
+                        <input type="checkbox" checked style="width: 16px; height: 16px; margin: 0; cursor: pointer; position: relative; z-index: 0;" data-type="boolean">
                     </td>`;
         } else {
             return `<td style="padding: 4px; border: 1px solid #ddd;">

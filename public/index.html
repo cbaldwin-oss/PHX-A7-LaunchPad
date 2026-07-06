@@ -2395,6 +2395,8 @@ function toggleFilterArray(val, arr) {
 }
 
 let currentPhaseRulesHeaders = [];
+// NEW: Define which exact columns should be treated as Checkboxes
+const booleanPhaseHeaders = ['Rule Active?', 'Include Open CHKs Per Phase', 'Include Open Gating Issues'];
 
 async function loadPhaseRules() {
     const tableHead = document.getElementById('phase-rules-header');
@@ -2403,7 +2405,6 @@ async function loadPhaseRules() {
     tableBody.innerHTML = '';
 
     try {
-        // Uses your existing GOOGLE_SHEET_URL
         const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getPhaseRules`);
         const data = await response.json();
 
@@ -2416,9 +2417,19 @@ async function loadPhaseRules() {
             // Build Rows
             data.data.slice(1).forEach(row => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = currentPhaseRulesHeaders.map((h, i) => 
-                    `<td style="padding: 4px; border: 1px solid #ddd;"><input type="text" value="${row[i] || ''}" style="width: 100%; border: none; outline: none; background: transparent;"></td>`
-                ).join('') + `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;"><span style="cursor:pointer; color:red;" onclick="this.closest('tr').remove()">X</span></td>`;
+                tr.innerHTML = currentPhaseRulesHeaders.map((h, i) => {
+                    // NEW: Render a checkbox if it's one of the boolean columns
+                    if (booleanPhaseHeaders.includes(h.trim())) {
+                        const isChecked = (row[i] === true || row[i] === 'TRUE' || row[i] === 'true') ? 'checked' : '';
+                        return `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;">
+                                    <input type="checkbox" ${isChecked} style="transform: scale(1.2); cursor: pointer;" data-type="boolean">
+                                </td>`;
+                    } else {
+                        return `<td style="padding: 4px; border: 1px solid #ddd;">
+                                    <input type="text" value="${row[i] || ''}" style="width: 100%; border: none; outline: none; background: transparent;">
+                                </td>`;
+                    }
+                }).join('') + `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;"><span style="cursor:pointer; color:red; font-weight:bold;" onclick="this.closest('tr').remove()">X</span></td>`;
                 tableBody.appendChild(tr);
             });
         }
@@ -2430,9 +2441,18 @@ async function loadPhaseRules() {
 function addPhaseRuleRow() {
     if (currentPhaseRulesHeaders.length === 0) return alert("Please wait for rules to load first.");
     const tr = document.createElement('tr');
-    tr.innerHTML = currentPhaseRulesHeaders.map(h => 
-        `<td style="padding: 4px; border: 1px solid #ddd;"><input type="text" value="" style="width: 100%; border: none; outline: none; background: transparent;"></td>`
-    ).join('') + `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;"><span style="cursor:pointer; color:red;" onclick="this.closest('tr').remove()">X</span></td>`;
+    tr.innerHTML = currentPhaseRulesHeaders.map(h => {
+        // NEW: Ensure new rows also render checkboxes for those specific columns
+        if (booleanPhaseHeaders.includes(h.trim())) {
+            return `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;">
+                        <input type="checkbox" checked style="transform: scale(1.2); cursor: pointer;" data-type="boolean">
+                    </td>`;
+        } else {
+            return `<td style="padding: 4px; border: 1px solid #ddd;">
+                        <input type="text" value="" style="width: 100%; border: none; outline: none; background: transparent;">
+                    </td>`;
+        }
+    }).join('') + `<td style="padding: 4px; border: 1px solid #ddd; text-align: center;"><span style="cursor:pointer; color:red; font-weight:bold;" onclick="this.closest('tr').remove()">X</span></td>`;
     document.getElementById('phase-rules-body').appendChild(tr);
 }
 
@@ -2443,7 +2463,13 @@ async function savePhaseRules() {
     const rows = [currentPhaseRulesHeaders]; // Start with headers
     Array.from(tableBody.children).forEach(tr => {
         const inputs = tr.querySelectorAll('input');
-        const rowData = Array.from(inputs).map(input => input.value);
+        const rowData = Array.from(inputs).map(input => {
+            // NEW: If it's a checkbox, save as TRUE/FALSE string
+            if (input.dataset.type === 'boolean' || input.type === 'checkbox') {
+                return input.checked ? 'TRUE' : 'FALSE';
+            }
+            return input.value;
+        });
         rows.push(rowData);
     });
 
@@ -2451,7 +2477,7 @@ async function savePhaseRules() {
         await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             body: JSON.stringify({ action: 'setPhaseRules', data: rows }),
-            mode: 'no-cors' // Added no-cors to prevent browser blocking on saves
+            mode: 'no-cors'
         });
         console.log("Phase Rules saved successfully to Google Sheets!");
     } catch (e) {

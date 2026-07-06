@@ -2401,7 +2401,7 @@ const booleanPhaseHeaders = ['Rule Active?', 'Include Open CHKs Per Phase', 'Inc
 async function loadPhaseRules() {
     const tableHead = document.getElementById('phase-rules-header');
     const tableBody = document.getElementById('phase-rules-body');
-    tableHead.innerHTML = '<th style="padding: 8px;">Fetching data from Google Sheets...</th>';
+    tableHead.innerHTML = '<th style="padding: 8px; background: #f1f3f4; position: sticky; top: 0; z-index: 5;">Fetching data from Google Sheets...</th>';
     tableBody.innerHTML = '';
 
     try {
@@ -2412,8 +2412,9 @@ async function loadPhaseRules() {
             currentPhaseRulesHeaders = data.data[0]; // First row is headers
             
             // Build Headers
-            tableHead.innerHTML = currentPhaseRulesHeaders.map(h => `<th style="padding: 8px; border: 1px solid #ddd;">${h}</th>`).join('') + '<th style="padding: 8px; border: 1px solid #ddd;">🗑️</th>';
-            
+tableHead.innerHTML = currentPhaseRulesHeaders.map(h => 
+  `<th style="padding: 8px; border: 1px solid #ddd; background: #f1f3f4; position: sticky; top: 0; z-index: 5;">${h}</th>`
+            ).join('') + `<th style="padding: 8px; border: 1px solid #ddd; background: #f1f3f4; position: sticky; top: 0; z-index: 5;">🗑️</th>`;            
             // Build Rows
             data.data.slice(1).forEach(row => {
                 const tr = document.createElement('tr');
@@ -3320,6 +3321,8 @@ function openScheduleConfigModal() {
     if (typeof Settings !== 'undefined' && Settings.init) {
         Settings.init();
     }
+
+    loadPhaseRules();
     
     document.getElementById('schedule-config-modal').style.display = 'flex';
 }

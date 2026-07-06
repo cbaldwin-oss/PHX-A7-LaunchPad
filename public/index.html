@@ -1136,6 +1136,26 @@ html, body {
             </div>
         </div>
 
+        <div style="border-top: 1px solid #ddd; padding-top: 20px; margin-bottom: 30px;">
+            <h2 style="color: #333; margin: 0;">Equivalent Activity Statuses</h2>
+            <p style="font-size:12px; color:#666; margin-bottom: 15px;">Select which Activity Types apply to each Phase.</p>
+            
+            <div style="display: flex; gap: 20px;">
+                <div style="flex: 1; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
+                    <h3 style="margin-top: 0; font-size: 14px; color: #2e7d32; border-bottom: 1px solid #ccc; padding-bottom: 5px;">L2 Activities</h3>
+                    <div id="eq-act-L2-list" style="max-height: 120px; overflow-y: auto; background: white; border: 1px solid #eee; border-radius: 4px; padding: 5px;"></div>
+                </div>
+                <div style="flex: 1; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
+                    <h3 style="margin-top: 0; font-size: 14px; color: #2e7d32; border-bottom: 1px solid #ccc; padding-bottom: 5px;">L3 Activities</h3>
+                    <div id="eq-act-L3-list" style="max-height: 120px; overflow-y: auto; background: white; border: 1px solid #eee; border-radius: 4px; padding: 5px;"></div>
+                </div>
+                <div style="flex: 1; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
+                    <h3 style="margin-top: 0; font-size: 14px; color: #2e7d32; border-bottom: 1px solid #ccc; padding-bottom: 5px;">L4 Activities</h3>
+                    <div id="eq-act-L4-list" style="max-height: 120px; overflow-y: auto; background: white; border: 1px solid #eee; border-radius: 4px; padding: 5px;"></div>
+                </div>
+            </div>
+        </div>
+
         <div style="border-top: 1px solid #ddd; padding-top: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
@@ -1790,6 +1810,43 @@ function switchMainView(viewType, btn) {
         if (subheader) subheader.style.display = 'flex';
         if (frozenBar) frozenBar.style.display = 'flex';
     }
+}
+
+// --- EQUIVALENT ACTIVITIES CONFIGURATION ---
+let equivalentActivitiesConfig = JSON.parse(localStorage.getItem('equivalentActivitiesConfig')) || { L2: [], L3: [], L4: [] };
+
+// Helper to render the checklists
+function renderEquivalentActivitiesUI() {
+    const phases = ['L2', 'L3', 'L4'];
+    // Col 3 represents 'Activities' in the database
+    const activities = (window.dropdownData && window.dropdownData.col3) ? window.dropdownData.col3 : [];
+    
+    phases.forEach(phase => {
+        const container = document.getElementById(`eq-act-${phase}-list`);
+        if (!container) return;
+        
+        container.innerHTML = '';
+        if (activities.length === 0) {
+            container.innerHTML = '<div style="color: #999; font-size: 12px; padding: 5px; text-align: center;">No activities found.<br>Add some in System Data first.</div>';
+            return;
+        }
+        
+        activities.forEach(act => {
+            const isChecked = equivalentActivitiesConfig[phase].includes(act) ? 'checked' : '';
+            const item = document.createElement('label');
+            item.style.cssText = "display: flex; align-items: center; padding: 6px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f0f0f0; transition: background 0.2s;";
+            
+            // Hover effect
+            item.onmouseenter = () => item.style.backgroundColor = '#f1f3f4';
+            item.onmouseleave = () => item.style.backgroundColor = 'transparent';
+            
+            item.innerHTML = `
+                <input type="checkbox" value="${act}" ${isChecked} style="margin-right: 10px; cursor: pointer; transform: scale(1.1);">
+                ${act}
+            `;
+            container.appendChild(item);
+        });
+    });
 }
 // --- ASSET ATTRIBUTES LOGIC ---
 let cachedAttributesData = [];
@@ -3326,6 +3383,8 @@ function openScheduleConfigModal() {
     loadPhaseRules();
     
     document.getElementById('schedule-config-modal').style.display = 'flex';
+    // NEW: Render the Equivalent Activities checklists
+    renderEquivalentActivitiesUI();
 }
 
 // Helper to swap array items
@@ -3350,6 +3409,15 @@ function saveNewConfigOrder() {
             col.name = nameInput.value.trim(); 
         }
     });
+    // NEW: Save Equivalent Activities Config
+    ['L2', 'L3', 'L4'].forEach(phase => {
+        const container = document.getElementById(`eq-act-${phase}-list`);
+        if (container) {
+            const checkedBoxes = container.querySelectorAll('input[type="checkbox"]:checked');
+            equivalentActivitiesConfig[phase] = Array.from(checkedBoxes).map(cb => cb.value);
+        }
+    });
+    localStorage.setItem('equivalentActivitiesConfig', JSON.stringify(equivalentActivitiesConfig));
     
     saveScheduleConfig(); // Saves to local storage and reloads the page
 }

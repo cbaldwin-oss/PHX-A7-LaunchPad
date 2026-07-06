@@ -3942,7 +3942,15 @@ function openMultiSelectMenu(cellElement, rowNum, dayLabel) {
     
     const opts = (window.dropdownData?.col6) || [];
     let currentContent = cellElement.getAttribute('data-selected') || "";
-    let items = currentContent ? currentContent.split(',').map(x => x.trim()).filter(x => x) : [];
+    // Use the safe pipe delimiter, but fallback to comma for older legacy data
+    let items = [];
+    if (currentContent) {
+        if (currentContent.includes('|')) {
+            items = currentContent.split('|').map(x => x.trim()).filter(x => x);
+        } else {
+            items = currentContent.split(',').map(x => x.trim()).filter(x => x);
+        }
+    }
     
     // Generate Checkboxes
     opts.forEach(opt => {
@@ -3963,7 +3971,7 @@ function openMultiSelectMenu(cellElement, rowNum, dayLabel) {
                 items = items.filter(i => i !== opt);
             }
             
-            const updatedString = items.join(', ');
+            const updatedString = items.join(' | '); // Now saves cleanly with a pipe
             cellElement.setAttribute('data-selected', updatedString);
             
             // Update the display text on the cell underneath

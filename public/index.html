@@ -3313,9 +3313,12 @@ function updateRowInUI(row) {
             const content = row[`col${i}`] || "";
             
             if (i === 5) {
-                // Column 5 is a status span
-                el.innerText = content;
-            } else if (i === 6) {
+                    // Column 5 is a status span
+                    // ONLY overwrite if the text changed, so we don't destroy hyperlinks
+                    if (el.innerText.trim() !== content.trim()) {
+                        el.innerText = content;
+                    }
+                } else if (i === 6) {
                 // Column 6 is the multi-select
                 el.setAttribute('data-selected', content);
                 if (el.options && el.options[0]) {
@@ -5061,10 +5064,13 @@ async function loadData(isSilent = false) {
         el.options[0].text = content ? `Selected: ${content}` : "+ Add Multi";
     }
     } else if (col === 5) {
-    el.innerText = content;
-} else {
-    // --- THE FIX FOR COLS 1-4, 7 ---
-    if (el.tagName === 'SELECT' && content !== "") {
+        // ONLY overwrite if the text changed, so we don't destroy hyperlinks
+        if (el.innerText.trim() !== content.trim()) {
+            el.innerText = content;
+        }
+    } else {
+        // --- THE FIX FOR COLS 1-4, 7 ---
+        if (el.tagName === 'SELECT' && content !== "") {
         // Check if the option already exists in the dropdown
         const exists = Array.from(el.options).some(opt => opt.value === content);
         
@@ -5303,14 +5309,18 @@ async function orderChronologically() {
             for (let col = 1; col <= 8; col++) {
                 const el = row.querySelector(`[data-col-index="${col}"]`);
                 let val = "";
+                let html = ""; // Capture HTML for the hyperlink
                 if (el) {
-                    if (col === 5) val = el.innerText || "";
+                    if (col === 5) {
+                        val = el.innerText || "";
+                        html = el.innerHTML || "";
+                    }
                     else if (col === 6) val = el.getAttribute('data-selected') || el.value || "";
                     else val = el.value || "";
                     
                     if (val === "..." || val === "+ Add Multi" || val === "Select...") val = "";
                 }
-                rowData.cols[col] = { val: val };
+                rowData.cols[col] = { val: val, html: html };
                 if (col === 1) rowData.timeStr = val;
             }
             // Convert time string to comparable numerical minutes
@@ -5319,7 +5329,6 @@ async function orderChronologically() {
         });
 
         // 2. Sort the scraped data by time (earliest to latest)
-        // Items without a valid time (9999 minutes) will automatically fall to the bottom of the day
         rowDataList.sort((a, b) => a.minutes - b.minutes);
 
         // 3. Re-inject the sorted data sequentially back into the DOM rows
@@ -5334,7 +5343,12 @@ async function orderChronologically() {
                 let content = sourceData.cols[col].val;
                 
                 if (col === 5) {
-                    targetEl.innerText = content || "...";
+                    // Check if there was a hyperlink to carry over
+                    if (sourceData.cols[col].html && sourceData.cols[col].html.includes('<a')) {
+                        targetEl.innerHTML = sourceData.cols[col].html;
+                    } else {
+                        targetEl.innerText = content || "...";
+                    }
                     applyCellColor(targetEl, content);
                 } else if (col === 6) {
                     targetEl.setAttribute('data-selected', content);

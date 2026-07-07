@@ -2209,34 +2209,51 @@ async function captureAndReadText() {
     captureBtn.innerText = "Transmitting to Google...";
     statusText.innerHTML = "<strong>Analyzing image via Google Vision...</strong>";
 
+    // 1. Grab raw video frame
     const rawCanvas = document.createElement('canvas');
     rawCanvas.width = video.videoWidth;
     rawCanvas.height = video.videoHeight;
     const rawCtx = rawCanvas.getContext('2d');
     rawCtx.drawImage(video, 0, 0, rawCanvas.width, rawCanvas.height);
 
+    // 2. Calculate crop coordinates based on the green box
     const scale = video.videoWidth / video.clientWidth;
     const cropWidth = video.clientWidth * 0.8 * scale;
     const cropHeight = 60 * scale; 
     const startX = video.clientWidth * 0.1 * scale;
     const startY = ((video.clientHeight / 2) - 30) * scale;
 
+    // --- THE FIX: SCALE AND PAD FOR GOOGLE OCR ---
+    const scaleFactor = 2; // Double resolution
+    const padding = 60;    // Add a thick white border so Google sees a "Document"
+
     const cropCanvas = document.createElement('canvas');
-    cropCanvas.width = cropWidth;
-    cropCanvas.height = cropHeight;
+    cropCanvas.width = (cropWidth * scaleFactor) + (padding * 2);
+    cropCanvas.height = (cropHeight * scaleFactor) + (padding * 2);
     const cropCtx = cropCanvas.getContext('2d');
     
-    // We removed the harsh CSS contrast filters. Google's ML models are trained on 
-    // natural photos (glares and all), so feeding it raw pixels actually improves accuracy.
-    cropCtx.drawImage(rawCanvas, startX, startY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+    // Fill the background with solid white
+    cropCtx.fillStyle = '#ffffff';
+    cropCtx.fillRect(0, 0, cropCanvas.width, cropCanvas.height);
 
+    // Grayscale and slight contrast boost to help the engine read stamped metal
+    cropCtx.filter = 'grayscale(100%) contrast(1.2)';
+
+    // Draw the video crop into the center of our white "document"
+    cropCtx.drawImage(
+        rawCanvas, 
+        startX, startY, cropWidth, cropHeight, 
+        padding, padding, cropWidth * scaleFactor, cropHeight * scaleFactor
+    );
+
+    // Stop the video stream
     if (window.ocrVideoStream) {
         window.ocrVideoStream.getTracks().forEach(track => track.stop());
         window.ocrVideoStream = null;
     }
 
-    // Convert the cropped image to a Base64 string
-    const base64Image = cropCanvas.toDataURL('image/png');
+    // Use JPEG format (Drive OCR prefers JPEG over PNG for physical photos)
+    const base64Image = cropCanvas.toDataURL('image/jpeg', 0.95);
 
     try {
         // Send the image to your Apps Script backend
@@ -2247,20 +2264,19 @@ async function captureAndReadText() {
 
         const result = await response.json();
 
-        if (result.success && result.text.trim()) {
-            // Clean up the text
+        // Check if result.text actually exists and isn't empty
+        if (result.success && result.text && result.text.trim()) {
             const extractedText = result.text.replace(/\n+/g, ' ').replace(/[|\[\]{}]/g, '').trim();
             
-            // Pop up a window to let the user verify and edit the text
             const userVerifiedText = prompt("Verify and edit the scanned text if necessary:", extractedText);
             
             if (userVerifiedText !== null && userVerifiedText.trim() !== "") {
                 fillAttributeField(userVerifiedText.trim());
             } else {
-                initTextScanner(); // Restart if they hit cancel
+                initTextScanner(); 
             }
         } else {
-            alert("Google's Vision engine couldn't detect legible text in that box. Try adjusting the angle to reduce glare.");
+            alert("Google's Vision engine couldn't detect legible text. Make sure the text is fully inside the green box and well-lit.");
             initTextScanner(); 
         }
     } catch (err) {

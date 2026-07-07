@@ -2206,8 +2206,8 @@ async function captureAndReadText() {
     if (!video || !video.videoWidth) return;
 
     captureBtn.disabled = true;
-    captureBtn.innerText = "Analyzing image...";
-    statusText.innerHTML = "<strong>Freezing frame...</strong>";
+    captureBtn.innerText = "Transmitting to Google...";
+    statusText.innerHTML = "<strong>Analyzing image via Google Vision...</strong>";
 
     const rawCanvas = document.createElement('canvas');
     rawCanvas.width = video.videoWidth;
@@ -2226,7 +2226,8 @@ async function captureAndReadText() {
     cropCanvas.height = cropHeight;
     const cropCtx = cropCanvas.getContext('2d');
     
-    cropCtx.filter = 'contrast(1.4) brightness(1.1)';
+    // We removed the harsh CSS contrast filters. Google's ML models are trained on 
+    // natural photos (glares and all), so feeding it raw pixels actually improves accuracy.
     cropCtx.drawImage(rawCanvas, startX, startY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
 
     if (window.ocrVideoStream) {
@@ -2234,26 +2235,37 @@ async function captureAndReadText() {
         window.ocrVideoStream = null;
     }
 
+    // Convert the cropped image to a Base64 string
+    const base64Image = cropCanvas.toDataURL('image/png');
+
     try {
-        const result = await Tesseract.recognize(cropCanvas, 'eng', {
-            logger: m => {
-                if (m.status === 'recognizing text') {
-                    statusText.innerHTML = `<span style="color: #1976d2;">Reading Text: ${Math.round(m.progress * 100)}%</span>`;
-                }
-            }
+        // Send the image to your Apps Script backend
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'ocrImage', image: base64Image })
         });
 
-        const extractedText = result.data.text.replace(/\n+/g, ' ').trim();
-        
-        if (extractedText) {
-            fillAttributeField(extractedText);
+        const result = await response.json();
+
+        if (result.success && result.text.trim()) {
+            // Clean up the text
+            const extractedText = result.text.replace(/\n+/g, ' ').replace(/[|\[\]{}]/g, '').trim();
+            
+            // Pop up a window to let the user verify and edit the text
+            const userVerifiedText = prompt("Verify and edit the scanned text if necessary:", extractedText);
+            
+            if (userVerifiedText !== null && userVerifiedText.trim() !== "") {
+                fillAttributeField(userVerifiedText.trim());
+            } else {
+                initTextScanner(); // Restart if they hit cancel
+            }
         } else {
-            alert("No legible text detected. Please ensure the text is well-lit and fits entirely inside the green box.");
+            alert("Google's Vision engine couldn't detect legible text in that box. Try adjusting the angle to reduce glare.");
             initTextScanner(); 
         }
     } catch (err) {
-        console.error("OCR Error:", err);
-        alert("An error occurred while reading the image.");
+        console.error("Cloud OCR Error:", err);
+        alert("A connection error occurred while sending the image to the cloud.");
         initTextScanner();
     }
 }

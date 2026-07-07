@@ -1937,6 +1937,122 @@ function renderAssetDirectory(assets) {
     });
 }
 
+// Creates a searchable floating menu for single-select columns (1, 2, 3, 4, 7)
+function openSearchableSingleSelect(cellElement, colIndex) {
+    let menu = document.getElementById('single-select-menu');
+    
+    // Create the global floating menu if it doesn't exist yet
+    if (!menu) {
+        menu = document.createElement('div');
+        menu.id = 'single-select-menu';
+        menu.style.cssText = 'display: none; position: absolute; background: white; border: 1px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 4px; z-index: 10000; max-height: 280px; flex-direction: column; min-width: 220px; font-family: sans-serif;';
+        document.body.appendChild(menu);
+        
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.id = 'single-select-search';
+        searchInput.placeholder = 'Type to search...';
+        searchInput.style.cssText = 'margin: 5px; padding: 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 13px; outline: none; background: #f8f9fa; flex-shrink: 0;';
+        menu.appendChild(searchInput);
+        
+        const listContainer = document.createElement('div');
+        listContainer.id = 'single-select-list';
+        listContainer.style.cssText = 'overflow-y: auto; flex: 1; padding: 0 5px 5px 5px;';
+        menu.appendChild(listContainer);
+        
+        // Listen for clicks outside the menu to close it
+        document.addEventListener('mousedown', (e) => {
+            if (menu.style.display === 'flex' && !menu.contains(e.target) && e.target !== menu._currentCell) {
+                menu.style.display = 'none';
+            }
+        });
+    }
+    
+    // Toggle close if clicking the exact same cell
+    if (menu.style.display === 'flex' && menu._currentCell === cellElement) {
+        menu.style.display = 'none';
+        return;
+    }
+    
+    menu._currentCell = cellElement;
+    const searchInput = document.getElementById('single-select-search');
+    const listContainer = document.getElementById('single-select-list');
+    
+    searchInput.value = '';
+    
+    // Grab the database options for this specific column
+    const opts = (window.dropdownData && window.dropdownData[`col${colIndex}`]) ? window.dropdownData[`col${colIndex}`] : [];
+    
+    const renderOptions = (filterText = "") => {
+        listContainer.innerHTML = '';
+        
+        // Always include a clear option at the top
+        const clearItem = document.createElement('div');
+        clearItem.style.cssText = "padding: 8px; cursor: pointer; font-size: 12px; color: #d32f2f; border-radius: 3px; border-bottom: 1px solid #eee; font-weight: bold; text-align: center;";
+        clearItem.innerText = "-- Clear Selection --";
+        clearItem.onclick = () => {
+            cellElement.value = "";
+            menu.style.display = 'none';
+            cellElement.dispatchEvent(new Event('change'));
+        };
+        listContainer.appendChild(clearItem);
+
+        let hasMatches = false;
+
+        // Filter and render the options
+        opts.forEach(opt => {
+            if (filterText && !opt.toLowerCase().includes(filterText.toLowerCase())) return;
+            
+            hasMatches = true;
+            const item = document.createElement('div');
+            item.style.cssText = "padding: 8px; cursor: pointer; font-size: 13px; color: #333; border-radius: 3px; border-bottom: 1px solid #f5f5f5;";
+            item.innerText = opt;
+            
+            // Highlight the currently selected option
+            if (cellElement.value === opt) {
+                item.style.backgroundColor = '#e3f2fd';
+                item.style.fontWeight = 'bold';
+                item.style.color = '#0d47a1';
+            }
+            
+            // Hover styling
+            item.onmouseenter = () => { if (cellElement.value !== opt) item.style.backgroundColor = "#f1f3f4"; };
+            item.onmouseleave = () => { if (cellElement.value !== opt) item.style.backgroundColor = "transparent"; };
+            
+            // On Click: Update the hidden select element and fire the change event
+            item.onclick = () => {
+                const exists = Array.from(cellElement.options).some(o => o.value === opt);
+                if (!exists) cellElement.add(new Option(opt, opt)); // Safeguard
+
+                cellElement.value = opt;
+                menu.style.display = 'none';
+                cellElement.dispatchEvent(new Event('change'));
+            };
+            
+            listContainer.appendChild(item);
+        });
+        
+        if (!hasMatches) {
+            listContainer.innerHTML += '<div style="padding: 10px; color: #999; font-size:12px; text-align: center;">No matches found</div>';
+        }
+    };
+    
+    renderOptions();
+    
+    // Live update as the user types
+    searchInput.oninput = (e) => renderOptions(e.target.value);
+    
+    // Position underneath the cell
+    const rect = cellElement.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + window.scrollY + 2}px`;
+    menu.style.left = `${rect.left + window.scrollX}px`;
+    menu.style.width = `${Math.max(rect.width, 220)}px`;
+    menu.style.display = 'flex';
+    
+    // Auto-focus the search bar immediately
+    setTimeout(() => searchInput.focus(), 50);
+}
+
 function displayAssetDetails(assetObj, assetName) {
     document.getElementById('attr-placeholder').style.display = 'none';
     const card = document.getElementById('attr-details-card');
@@ -3840,6 +3956,15 @@ function addRowsToContainer(container, dayLabel, anchorBtn = null) {
                 const opts = (window.dropdownData && window.dropdownData[`col${col}`]) ? window.dropdownData[`col${col}`] : [];
                 opts.forEach(t => element.appendChild(new Option(t, t)));
                 
+                // --- NEW BLOCK: Intercept click to open Searchable Menu ---
+                const openSingleMenu = (e) => {
+                    e.preventDefault(); 
+                    openSearchableSingleSelect(element, col);
+                };
+                element.addEventListener('mousedown', openSingleMenu);
+                element.addEventListener('touchstart', openSingleMenu, {passive: false});
+                // ----------------------------------------------------------
+                
                 element.onchange = () => { 
                     applyCellColor(element, element.value); 
                     saveCell(element, element.value, col, true);
@@ -4203,7 +4328,7 @@ function toggleAllSections() {
     btn.innerText = allWeeksCollapsed ? "Expand All Weeks" : "Collapse All Weeks";
 }
 
-// Creates and positions a floating multi-select checkbox menu like Google Sheets
+// Creates and positions a floating multi-select checkbox menu with a search bar
 function openMultiSelectMenu(cellElement, rowNum, dayLabel) {
     let menu = document.getElementById('multi-select-menu');
     
@@ -4211,109 +4336,127 @@ function openMultiSelectMenu(cellElement, rowNum, dayLabel) {
     if (!menu) {
         menu = document.createElement('div');
         menu.id = 'multi-select-menu';
-        menu.style.cssText = 'display: none; position: absolute; background: white; border: 1px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 4px; z-index: 10000; max-height: 250px; overflow-y: auto; padding: 5px; min-width: 200px; font-family: sans-serif;';
+        // Updated styling to use display: flex and support the new search bar
+        menu.style.cssText = 'display: none; position: absolute; background: white; border: 1px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 4px; z-index: 10000; max-height: 280px; flex-direction: column; min-width: 220px; font-family: sans-serif;';
+        
+        const header = document.createElement('div');
+        header.innerText = 'Select Options';
+        header.style.cssText = 'padding: 5px 8px; font-size: 11px; font-weight: bold; color: #666; border-bottom: 1px solid #eee; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0;';
+        menu.appendChild(header);
+
+        // --- NEW: Add the Search Input Bar ---
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.id = 'multi-select-search';
+        searchInput.placeholder = 'Type to search...';
+        searchInput.style.cssText = 'margin: 5px; padding: 6px; border: 1px solid #ddd; border-radius: 3px; font-size: 13px; outline: none; background: #f8f9fa; flex-shrink: 0;';
+        menu.appendChild(searchInput);
+        
+        const listContainer = document.createElement('div');
+        listContainer.id = 'multi-select-list';
+        listContainer.style.cssText = 'overflow-y: auto; flex: 1; padding: 0 5px 5px 5px;';
+        menu.appendChild(listContainer);
+
         document.body.appendChild(menu);
         
         // Listen for clicks outside the menu to close it
         document.addEventListener('mousedown', (e) => {
-            if (menu.style.display === 'block' && !menu.contains(e.target) && e.target !== menu._currentCell) {
+            if (menu.style.display === 'flex' && !menu.contains(e.target) && e.target !== menu._currentCell) {
                 menu.style.display = 'none';
             }
         });
     }
     
     // Toggle close if clicking the same cell again
-    if (menu.style.display === 'block' && menu._currentCell === cellElement) {
+    if (menu.style.display === 'flex' && menu._currentCell === cellElement) {
         menu.style.display = 'none';
         return;
     }
     
     menu._currentCell = cellElement;
-    menu.innerHTML = '';
+    const searchInput = document.getElementById('multi-select-search');
+    const listContainer = document.getElementById('multi-select-list');
     
-    // Add header
-    const header = document.createElement('div');
-    header.innerText = 'Select Options';
-    header.style.cssText = 'padding: 5px 8px; font-size: 11px; font-weight: bold; color: #666; border-bottom: 1px solid #eee; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;';
-    menu.appendChild(header);
+    searchInput.value = '';
     
     const opts = (window.dropdownData?.col6) || [];
     let currentContent = cellElement.getAttribute('data-selected') || "";
     let items = [];
     
     if (currentContent) {
-        // 1. If the saved text perfectly matches a single option, it's just one item.
         if (opts.includes(currentContent.trim())) {
             items = [currentContent.trim()];
-        } 
-        // 2. Otherwise, look for our new pipe separator
-        else if (currentContent.includes('|')) {
+        } else if (currentContent.includes('|')) {
             items = currentContent.split('|').map(x => x.trim()).filter(x => x);
-        } 
-        // 3. Finally, fallback to old comma-separated legacy data
-        else {
+        } else {
             items = currentContent.split(',').map(x => x.trim()).filter(x => x);
         }
     }
     
-    // Generate Checkboxes
-    opts.forEach(opt => {
-        const label = document.createElement('label');
-        label.style.cssText = "display: flex; align-items: center; padding: 6px 8px; cursor: pointer; font-size: 13px; color: #333; border-radius: 3px;";
-        
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.value = opt;
-        cb.checked = items.some(i => i === opt.trim());
-        cb.style.cssText = "margin-right: 10px; cursor: pointer; transform: scale(1.1);";
-        
-        // Handle Checking/Unchecking
-        cb.onchange = () => {
-            if (cb.checked) {
-                if (!items.includes(opt)) items.push(opt);
-            } else {
-                items = items.filter(i => i !== opt);
-            }
+    // Rendering logic filtered by text
+    const renderMultiOptions = (filterText = "") => {
+        listContainer.innerHTML = '';
+        let hasMatches = false;
+
+        // Generate Checkboxes
+        opts.forEach(opt => {
+            if (filterText && !opt.toLowerCase().includes(filterText.toLowerCase())) return;
+            hasMatches = true;
+
+            const label = document.createElement('label');
+            label.style.cssText = "display: flex; align-items: center; padding: 6px 8px; cursor: pointer; font-size: 13px; color: #333; border-radius: 3px;";
             
-            const updatedString = items.join(' | '); // Now saves cleanly with a pipe
-            cellElement.setAttribute('data-selected', updatedString);
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = opt;
+            cb.checked = items.some(i => i === opt.trim());
+            cb.style.cssText = "margin-right: 10px; cursor: pointer; transform: scale(1.1);";
             
-            // Update the display text on the cell underneath
-            if (items.length > 0) {
-                if (cellElement.options && cellElement.options[0]) {
-                    cellElement.options[0].text = `Selected (${items.length}): ${updatedString}`;
+            cb.onchange = () => {
+                if (cb.checked) {
+                    if (!items.includes(opt)) items.push(opt);
+                } else {
+                    items = items.filter(i => i !== opt);
                 }
-                cellElement.style.backgroundColor = "#e7f3ff";
-            } else {
-                if (cellElement.options && cellElement.options[0]) {
-                    cellElement.options[0].text = "+ Add Multi";
+                
+                const updatedString = items.join(' | ');
+                cellElement.setAttribute('data-selected', updatedString);
+                
+                if (items.length > 0) {
+                    if (cellElement.options && cellElement.options[0]) cellElement.options[0].text = `Selected (${items.length}): ${updatedString}`;
+                    cellElement.style.backgroundColor = "#e7f3ff";
+                } else {
+                    if (cellElement.options && cellElement.options[0]) cellElement.options[0].text = "+ Add Multi";
+                    cellElement.style.backgroundColor = "";
                 }
-                cellElement.style.backgroundColor = "";
-            }
+                saveCell(cellElement, updatedString, 6, true);
+            };
             
-            // Immediately save data to the cloud as checkboxes are toggled
-            saveCell(cellElement, updatedString, 6, true);
-        };
-        
-        // Hover effect styling
-        label.onmouseenter = () => label.style.backgroundColor = "#f1f3f4";
-        label.onmouseleave = () => label.style.backgroundColor = "transparent";
-        
-        label.appendChild(cb);
-        label.appendChild(document.createTextNode(opt));
-        menu.appendChild(label);
-    });
-    
-    if (opts.length === 0) {
-        menu.innerHTML += '<div style="padding: 10px; color: #999; font-size:12px; text-align: center;">No options available</div>';
-    }
+            label.onmouseenter = () => label.style.backgroundColor = "#f1f3f4";
+            label.onmouseleave = () => label.style.backgroundColor = "transparent";
+            
+            label.appendChild(cb);
+            label.appendChild(document.createTextNode(opt));
+            listContainer.appendChild(label);
+        });
+
+        if (!hasMatches) {
+            listContainer.innerHTML = '<div style="padding: 10px; color: #999; font-size:12px; text-align: center;">No options match</div>';
+        }
+    };
+
+    renderMultiOptions();
+    searchInput.oninput = (e) => renderMultiOptions(e.target.value);
     
     // Position the menu perfectly underneath the clicked cell
     const rect = cellElement.getBoundingClientRect();
     menu.style.top = `${rect.bottom + window.scrollY + 2}px`;
     menu.style.left = `${rect.left + window.scrollX}px`;
-    menu.style.width = `${Math.max(rect.width, 200)}px`;
-    menu.style.display = 'block';
+    menu.style.width = `${Math.max(rect.width, 220)}px`;
+    menu.style.display = 'flex'; // Use flex for layout inside
+
+    // Auto-focus the search bar immediately 
+    setTimeout(() => searchInput.focus(), 50);
 }
 
 // Bulk Selection State

@@ -4325,9 +4325,9 @@ async function deleteFullRow(wrapperId, bypassConfirm = false) {
 }
 
 async function lookupColumn5Value(rowNum, dayLabel, isBackground = false) {
-    const val3 = document.getElementById(`${dayLabel}-r${rowNum}-c3`)?.value;
-    const val4 = document.getElementById(`${dayLabel}-r${rowNum}-c4`)?.value;
-    const col5 = document.getElementById(`${dayLabel}-r${rowNum}-c5`);
+    const val3 = document.getElementById(`${dayLabel}-r${rowNum}-c3`)?.value; // Activity
+    const val4 = document.getElementById(`${dayLabel}-r${rowNum}-c4`)?.value; // Asset
+    const col5 = document.getElementById(`${dayLabel}-r${rowNum}-c5`);        // Status Field
 
     if (!val3 || val3 === "" || !val4 || val4 === "" || !col5) {
         if (col5) col5.innerText = "..."; 
@@ -4336,13 +4336,26 @@ async function lookupColumn5Value(rowNum, dayLabel, isBackground = false) {
 
     const currentText = col5.innerText;
 
+    // --- RESTORED: Translate Activity into Phase Level (Level 2, Level 3, Level 4) ---
+    let phaseToLookup = val3; // Fallback to raw value
+    const cleanVal3 = val3.trim();
+    
+    // Check our Equivalent Activities dictionary to see which phase this activity belongs to
+    if (equivalentActivitiesConfig.L2 && equivalentActivitiesConfig.L2.map(v => v.trim()).includes(cleanVal3)) {
+        phaseToLookup = "Level 2";
+    } else if (equivalentActivitiesConfig.L3 && equivalentActivitiesConfig.L3.map(v => v.trim()).includes(cleanVal3)) {
+        phaseToLookup = "Level 3";
+    } else if (equivalentActivitiesConfig.L4 && equivalentActivitiesConfig.L4.map(v => v.trim()).includes(cleanVal3)) {
+        phaseToLookup = "Level 4";
+    }
+
     try {
-        // --- THE FIX: Only show indicator if NOT a background sync ---
         if (!isBackground) {
             col5.innerText = "⏳ Checking...";
         }
 
-        const url = `${GOOGLE_SCRIPT_URL}?action=lookup&col3=${encodeURIComponent(val3)}&col4=${encodeURIComponent(val4)}`;
+        // Send the Translated Phase and the Asset Name to Apps Script
+        const url = `${GOOGLE_SCRIPT_URL}?action=lookup&col3=${encodeURIComponent(phaseToLookup)}&col4=${encodeURIComponent(val4)}`;
         const response = await fetch(url);
         const data = await response.json();
 
@@ -4360,7 +4373,7 @@ async function lookupColumn5Value(rowNum, dayLabel, isBackground = false) {
                 applyCellColor(col5, data.result);
                 saveCell(col5, data.result, 5, true);
             }
-        }else if (!isBackground) {
+        } else if (!isBackground) {
             col5.innerText = "NA";
         }
     } catch (e) {

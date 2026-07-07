@@ -3312,11 +3312,11 @@ function updateRowInUI(row) {
         if (el && el !== document.activeElement) {
             const content = row[`col${i}`] || "";
             
-            if (i === 5) {
+           if (i === 5) {
                     // Column 5 is a status span
-                    // ONLY overwrite if the text changed, so we don't destroy hyperlinks
-                    if (el.innerText.trim() !== content.trim()) {
-                        el.innerText = content;
+                    // ONLY overwrite if the HTML changed, so we don't destroy hyperlinks
+                    if (el.innerHTML.trim() !== content.trim()) {
+                        el.innerHTML = content;
                     }
                 } else if (i === 6) {
                 // Column 6 is the multi-select
@@ -4724,7 +4724,7 @@ async function saveRow(rowNum, dayLabel, col6Override = null) {
         col2: document.getElementById(`${dayLabel}-r${rowNum}-c2`)?.value || "",
         col3: document.getElementById(`${dayLabel}-r${rowNum}-c3`)?.value || "",
         col4: document.getElementById(`${dayLabel}-r${rowNum}-c4`)?.value || "",
-        col5: document.getElementById(`${dayLabel}-r${rowNum}-c5`)?.innerText || "", // Column 5 is a Span
+        col5: document.getElementById(`${dayLabel}-r${rowNum}-c5`)?.innerHTML || "", // <-- CHANGED TO innerHTML
         col6: col6Override !== null ? col6Override : (document.getElementById(`${dayLabel}-r${rowNum}-c6`)?.getAttribute('data-selected') || ""),
         col7: document.getElementById(`${dayLabel}-r${rowNum}-c7`)?.value || "",
         col8: document.getElementById(`${dayLabel}-r${rowNum}-c8`)?.value || ""
@@ -5065,11 +5065,11 @@ async function loadData(isSilent = false) {
         el.options[0].text = content ? `Selected: ${content}` : "+ Add Multi";
     }
     } else if (col === 5) {
-        // ONLY overwrite if the text changed, so we don't destroy hyperlinks
-        if (el.innerText.trim() !== content.trim()) {
-            el.innerText = content;
-        }
-    } else {
+                    // ONLY overwrite if the HTML changed, so we don't destroy hyperlinks
+                    if (el.innerHTML.trim() !== content.trim()) {
+                        el.innerHTML = content;
+                    }
+                } else {
         // --- THE FIX FOR COLS 1-4, 7 ---
         if (el.tagName === 'SELECT' && content !== "") {
         // Check if the option already exists in the dropdown

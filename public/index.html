@@ -1181,7 +1181,7 @@ html, body {
 
         <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #eee; padding-top: 20px; margin-top: 20px;">
             <button onclick="document.getElementById('schedule-config-modal').style.display='none'" style="padding: 8px 15px; cursor: pointer; background: #f1f3f4; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; color: #555;">Cancel</button>
-           <button onclick="saveAllSettings(this)" style="padding: 8px 15px; background: #2e7d32; color: white; cursor: pointer; border: none; border-radius: 4px; font-weight: bold;">Save All Settings</button>
+           <button onclick="saveAllSettings()" style="padding: 8px 15px; background: #2e7d32; color: white; cursor: pointer; border: none; border-radius: 4px; font-weight: bold;">Save All Settings</button>
     </div>
 </div>
     
@@ -3422,7 +3422,7 @@ function moveCol(index, direction) {
 
 // Grabs the checkbox statuses, new names, and saves
 // Master Save Function: Waits for cloud saves before reloading
-async function saveAllSettings(btn) {
+async function saveAllSettings() {
     // 1. Update UI so user knows it's working
     const originalText = btn.innerText;
     btn.innerText = "Saving to Cloud... ⏳";

@@ -869,9 +869,13 @@
         let html = '';
         let type = (level === 'L4') ? 'test' : 'checklist';
         for (let i = 1; i <= maxCount; i++) {
-            let val = row[`${level} Gate CL ${i}`];
-            let link = row[`${level} Gate CL ${i}_Link`] || row[`${level} Gate CL ${i} Link`];
-            html += renderStackedCell(val, `gate-cell ${level.toLowerCase()}-gate-col`, type, link).replace('filter-target', ''); 
+            // Broad fallback to catch varying column names in your database/sheet
+            let val = row[`${level} Gate CL ${i}`] || row[`${level} Gate ${i}`] || row[`${level} Gate CL${i}`] || '';
+            let link = row[`${level} Gate CL ${i}_Link`] || row[`${level} Gate CL ${i} Link`] || 
+                       row[`${level} Gate ${i}_Link`] || row[`${level} Gate ${i} Link`] || '';
+                       
+            // Notice we removed the .replace('filter-target') to preserve the exact original behavior
+            html += renderStackedCell(val, `gate-cell ${level.toLowerCase()}-gate-col`, type, link); 
         }
         return html;
     }
@@ -1114,9 +1118,10 @@
                         }
                     }
                     
-                    // Track Max Gate CLs
                     for(let i=1; i<=20; i++) {
-                        let val = row[`${level} Gate CL ${i}`];
+                        // Use the same broad fallback to detect new columns
+                        let val = row[`${level} Gate CL ${i}`] || row[`${level} Gate ${i}`] || row[`${level} Gate CL${i}`];
+                        
                         if(val !== undefined && val !== null) {
                             let clean = String(val).replace(/\(Unknown\)/ig, '').trim();
                             if(clean !== '' && clean !== 'N/A' && clean !== 'Clear' && clean !== '-') {

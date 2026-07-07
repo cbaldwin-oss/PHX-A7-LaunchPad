@@ -2548,11 +2548,19 @@ async function savePhaseRules() {
     Array.from(tableBody.children).forEach(tr => {
         const inputs = tr.querySelectorAll('input');
         const rowData = Array.from(inputs).map(input => {
-            // NEW: If it's a checkbox, save as TRUE/FALSE string
+            // If it's a checkbox, save as TRUE/FALSE string
             if (input.dataset.type === 'boolean' || input.type === 'checkbox') {
                 return input.checked ? 'TRUE' : 'FALSE';
             }
-            return input.value;
+            
+            let val = input.value;
+            // NEW: Prefix with a single quote if it starts with an equals sign (or math symbols) 
+            // so Google Sheets treats it as plain text instead of a broken formula!
+            if (val && (val.trim().startsWith('=') || val.trim().startsWith('+') || val.trim().startsWith('-'))) {
+                val = "'" + val;
+            }
+            
+            return val;
         });
         rows.push(rowData);
     });

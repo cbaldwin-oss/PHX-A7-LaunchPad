@@ -2058,30 +2058,6 @@ function startScanner(targetKey) {
     document.getElementById('scanner-viewport').style.border = "1px dashed #ccc";
 }
 
-function stopScanner() {
-    document.getElementById('scanner-modal').style.display = 'none';
-    
-    if (window.html5QrcodeScanner) {
-        window.html5QrcodeScanner.clear().catch(e => console.log(e));
-    }
-    
-    if (window.html5Qrcode) {
-        window.html5Qrcode.stop().then(() => {
-            window.html5Qrcode.clear();
-            window.html5Qrcode = null;
-        }).catch(e => console.log(e));
-    }
-    
-    if (window.ocrVideoStream) {
-        window.ocrVideoStream.getTracks().forEach(track => track.stop());
-        window.ocrVideoStream = null;
-    }
-    
-    window.ocrImageObj = null;
-    window.cropRect = null;
-    window.currentScanTargetKey = null;
-}
-
 // --- MODE 1: AUTO-START QR CODE (WITH SMART CONTEXT) ---
 function initQRCodeScanner() {
     if (window.ocrVideoStream) {
@@ -2166,12 +2142,40 @@ function initQRCodeScanner() {
     });
 }
 
+function stopScanner() {
+    document.getElementById('scanner-modal').style.display = 'none';
+    
+    // --- NEW: Reset the modal back to its normal small size ---
+    const modalBox = document.querySelector('#scanner-modal > div');
+    if (modalBox) {
+        modalBox.style.width = '450px';
+        modalBox.style.height = 'auto';
+    }
+    
+    if (window.html5QrcodeScanner) {
+        window.html5QrcodeScanner.clear().catch(e => console.log(e));
+    }
+    if (window.html5Qrcode) {
+        window.html5Qrcode.stop().then(() => {
+            window.html5Qrcode.clear();
+            window.html5Qrcode = null;
+        }).catch(e => console.log(e));
+    }
+    if (window.ocrVideoStream) {
+        window.ocrVideoStream.getTracks().forEach(track => track.stop());
+        window.ocrVideoStream = null;
+    }
+    
+    window.currentScanTargetKey = null;
+    window.ocrImageObj = null;
+    window.cropRect = null;
+}
+
 // --- MODE 2: HIGH-RES PHOTO & CROP OCR ---
 window.ocrImageObj = null;
 window.cropRect = null;
 
 async function initTextScanner() {
-    // 1. Clear other scanners
     if (window.html5QrcodeScanner) window.html5QrcodeScanner.clear();
     if (window.html5Qrcode) {
         window.html5Qrcode.stop().then(() => {
@@ -2184,10 +2188,18 @@ async function initTextScanner() {
         window.ocrVideoStream = null;
     }
 
+    // --- NEW: Reset the modal back to its normal small size for the menu ---
+    const modalBox = document.querySelector('#scanner-modal > div');
+    if (modalBox) {
+        modalBox.style.width = '450px';
+        modalBox.style.height = 'auto';
+    }
+
     const viewport = document.getElementById('scanner-viewport');
     viewport.style.border = "none";
+    viewport.style.display = "block";
+    viewport.style.height = "auto";
     
-    // 2. Render the Native Camera Button
     viewport.innerHTML = `
         <div style="padding: 30px; text-align: center; background: #fff3e0; border-radius: 8px; border: 1px solid #ffcc80;">
             <p style="margin-top: 0; color: #e65100; font-weight: bold; font-size: 16px;">Take a clear photo of the nameplate</p>
@@ -2200,7 +2212,6 @@ async function initTextScanner() {
     `;
 }
 
-// 3. Handle the returned photo
 function handleOCRImage(event) {
     const file = event.target.files[0];
     if(!file) return;
@@ -2217,82 +2228,71 @@ function handleOCRImage(event) {
     reader.readAsDataURL(file);
 }
 
-// 4. Draw the UI and calculate the EXACT rendered image dimensions
+// 4. Draw the FULL SCREEN UI with flawless "Hug Wrapper" Math
 function renderCropperUI(img) {
     const viewport = document.getElementById('scanner-viewport');
     
+    // --- NEW: Expand the modal to take up 95% of the entire screen ---
+    const modalBox = document.querySelector('#scanner-modal > div');
+    if (modalBox) {
+        modalBox.style.width = '95vw';
+        modalBox.style.height = '95vh';
+    }
+    
+    // Make the viewport stretch to fill the newly expanded modal
+    viewport.style.display = 'flex';
+    viewport.style.flexDirection = 'column';
+    viewport.style.height = '100%';
+    viewport.style.flex = '1';
+
+    // The inner 'inline-block' wrapper completely eliminates letterboxing!
     viewport.innerHTML = `
-        <p style="text-align:center; font-weight:bold; color:#1976d2; margin: 0 0 10px 0;">Draw a box around the text</p>
-        <div id="crop-container" style="position:relative; width:100%; height:400px; display:flex; justify-content:center; align-items:center; overflow:hidden; touch-action: none; background: #000; border-radius: 8px;">
-            <img id="crop-img" src="${img.src}" style="max-width:100%; max-height:100%; object-fit:contain; pointer-events:none; display:block;">
-            <div id="crop-box" style="position:absolute; border:2px solid #00ff00; background:rgba(0,255,0,0.2); display:none; pointer-events:none; z-index:5;"></div>
-            <div id="crop-touch-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:10; cursor: crosshair;"></div>
+        <p style="text-align:center; font-weight:bold; color:#1976d2; margin: 0 0 10px 0; flex-shrink: 0;">Draw a box around the text</p>
+        <div id="crop-container" style="position:relative; width:100%; flex: 1; display:flex; justify-content:center; align-items:center; overflow:hidden; touch-action: none; background: #000; border-radius: 8px;">
+            <div style="position: relative; display: inline-block; max-width: 100%; max-height: 100%;">
+                <img id="crop-img" src="${img.src}" style="max-width:100%; max-height:65vh; display:block; pointer-events:none;">
+                <div id="crop-box" style="position:absolute; border:2px solid #00ff00; background:rgba(0,255,0,0.2); display:none; pointer-events:none; z-index:5;"></div>
+                <div id="crop-touch-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:10; cursor: crosshair;"></div>
+            </div>
         </div>
-        <button id="ocr-process-btn" onclick="processCropAndRead()" style="width: 100%; margin-top: 15px; padding: 14px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; display:none; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">✅ Read Selected Text</button>
-        <p id="ocr-status-text" style="text-align:center; color:#666; font-size:13px; margin-top:10px;"></p>
+        <button id="ocr-process-btn" onclick="processCropAndRead()" style="width: 100%; margin-top: 15px; padding: 14px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; display:none; box-shadow: 0 2px 4px rgba(0,0,0,0.2); flex-shrink: 0;">✅ Read Selected Text</button>
+        <p id="ocr-status-text" style="text-align:center; color:#666; font-size:13px; margin-top:10px; flex-shrink: 0;"></p>
     `;
 
     const layer = document.getElementById('crop-touch-layer');
     const box = document.getElementById('crop-box');
-    const imgEl = document.getElementById('crop-img');
     
     let startX, startY;
     let isDrawing = false;
-    let renderData = {};
+    let rectW, rectH;
 
-    // --- THE FIX: Calculate exactly where the photo sits inside the black box ---
-    const calculateRenderedImage = () => {
-        const rect = imgEl.getBoundingClientRect();
-        const imgRatio = imgEl.naturalWidth / imgEl.naturalHeight;
-        const containerRatio = rect.width / rect.height;
-        
-        let w = rect.width;
-        let h = rect.height;
-        let offX = 0;
-        let offY = 0;
-        
-        // Account for letterboxing (black bars)
-        if (imgRatio > containerRatio) {
-            h = rect.width / imgRatio;
-            offY = (rect.height - h) / 2;
-        } else {
-            w = rect.height * imgRatio;
-            offX = (rect.width - w) / 2;
-        }
-        const layerRect = layer.getBoundingClientRect();
-        return { w, h, offX, offY, layerLeft: layerRect.left, layerTop: layerRect.top };
-    };
-
+    // The math is now incredibly simple because the layer EXACTLY matches the image
     const getPos = (e) => {
+        const rect = layer.getBoundingClientRect();
         let clientX = e.touches ? e.touches[0].clientX : e.clientX;
         let clientY = e.touches ? e.touches[0].clientY : e.clientY;
         
-        // 1. Get touch coordinate relative to the container
-        let x = clientX - renderData.layerLeft;
-        let y = clientY - renderData.layerTop;
+        let x = clientX - rect.left;
+        let y = clientY - rect.top;
         
-        // 2. Subtract the black letterbox bars to get coordinate relative to the PHOTO
-        x = x - renderData.offX;
-        y = y - renderData.offY;
+        // Lock dragging to inside the photo bounds
+        x = Math.max(0, Math.min(x, rect.width));
+        y = Math.max(0, Math.min(y, rect.height));
         
-        // 3. Prevent dragging outside the photo boundaries
-        x = Math.max(0, Math.min(x, renderData.w));
-        y = Math.max(0, Math.min(y, renderData.h));
-        
-        return { x, y };
+        return { x, y, width: rect.width, height: rect.height };
     };
 
     const onStart = (e) => {
         e.preventDefault();
         isDrawing = true;
-        renderData = calculateRenderedImage();
         const pos = getPos(e);
         startX = pos.x;
         startY = pos.y;
+        rectW = pos.width;
+        rectH = pos.height;
         
-        // Visually draw the box (adding the offset back so it matches the screen)
-        box.style.left = (startX + renderData.offX) + 'px';
-        box.style.top = (startY + renderData.offY) + 'px';
+        box.style.left = startX + 'px';
+        box.style.top = startY + 'px';
         box.style.width = '0px';
         box.style.height = '0px';
         box.style.display = 'block';
@@ -2304,25 +2304,22 @@ function renderCropperUI(img) {
         e.preventDefault();
         const pos = getPos(e);
         
-        const currentX = pos.x;
-        const currentY = pos.y;
+        const left = Math.min(startX, pos.x);
+        const top = Math.min(startY, pos.y);
+        const width = Math.abs(pos.x - startX);
+        const height = Math.abs(pos.y - startY);
 
-        const left = Math.min(startX, currentX);
-        const top = Math.min(startY, currentY);
-        const width = Math.abs(currentX - startX);
-        const height = Math.abs(currentY - startY);
-
-        box.style.left = (left + renderData.offX) + 'px';
-        box.style.top = (top + renderData.offY) + 'px';
+        box.style.left = left + 'px';
+        box.style.top = top + 'px';
         box.style.width = width + 'px';
         box.style.height = height + 'px';
         
-        // Save the PERFECT math percentages for the high-res crop
+        // Exact percentages to pass to the processing function
         window.cropRect = {
-            leftPct: left / renderData.w,
-            topPct: top / renderData.h,
-            widthPct: width / renderData.w,
-            heightPct: height / renderData.h
+            leftPct: left / rectW,
+            topPct: top / rectH,
+            widthPct: width / rectW,
+            heightPct: height / rectH
         };
     };
 

@@ -15,6 +15,9 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
 <style>
+    .drag-over-top { box-shadow: inset 0 3px 0 #2e7d32 !important; }
+    .drag-over-bottom { box-shadow: inset 0 -3px 0 #2e7d32 !important; }
+    .dragging { background-color: #f1f8e9 !important; opacity: 0.8; }
 
     .header {
         height: 80px;
@@ -3930,6 +3933,70 @@ function addRowsToContainer(container, dayLabel, anchorBtn = null, startIdx = 0,
         // Hide initial overflow rows, but always show dynamically added ones
         rowDiv.style.display = (r > 14 && startIdx === 0) ? 'none' : 'flex';
 
+        // --- NEW DRAG AND DROP HANDLE ---
+        const dragHandle = document.createElement('div');
+        dragHandle.innerHTML = '⣿';
+        dragHandle.style.cssText = "cursor: grab; color: #bbb; padding: 0 5px; font-size: 18px; user-select: none; display: flex; align-items: center;";
+        dragHandle.className = "drag-handle";
+        dragHandle.title = "Drag to reorder";
+        
+        // Only allow dragging when hovering over the handle, so inputs still work normally
+        dragHandle.onmouseenter = () => rowDiv.setAttribute('draggable', 'true');
+        dragHandle.onmouseleave = () => rowDiv.removeAttribute('draggable');
+        
+        rowDiv.appendChild(dragHandle);
+
+        // --- NEW DRAG AND DROP EVENTS ---
+        rowDiv.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', rowDiv.id);
+            e.dataTransfer.effectAllowed = 'move';
+            rowDiv.classList.add('dragging');
+        });
+
+        rowDiv.addEventListener('dragend', () => {
+            rowDiv.classList.remove('dragging');
+            document.querySelectorAll('.cell-row').forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
+        });
+
+        rowDiv.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            // Prevent dragging across different days to protect database integrity
+            const draggingRow = document.querySelector('.dragging');
+            if (!draggingRow || draggingRow.getAttribute('data-date') !== dayLabel) return;
+            
+            const bounding = rowDiv.getBoundingClientRect();
+            const offset = bounding.y + (bounding.height / 2);
+            
+            rowDiv.classList.remove('drag-over-top', 'drag-over-bottom');
+            if (e.clientY - offset > 0) rowDiv.classList.add('drag-over-bottom');
+            else rowDiv.classList.add('drag-over-top');
+        });
+
+        rowDiv.addEventListener('dragleave', () => {
+            rowDiv.classList.remove('drag-over-top', 'drag-over-bottom');
+        });
+
+        rowDiv.addEventListener('drop', (e) => {
+            e.preventDefault();
+            rowDiv.classList.remove('drag-over-top', 'drag-over-bottom');
+            
+            const draggingRow = document.querySelector('.dragging');
+            if (!draggingRow || draggingRow === rowDiv || draggingRow.getAttribute('data-date') !== dayLabel) return;
+
+            const bounding = rowDiv.getBoundingClientRect();
+            const offset = bounding.y + (bounding.height / 2);
+            
+            // Reorder the DOM Element visually
+            if (e.clientY - offset > 0) rowDiv.parentNode.insertBefore(draggingRow, rowDiv.nextSibling);
+            else rowDiv.parentNode.insertBefore(draggingRow, rowDiv);
+            
+            // Trigger the permanent DB save
+            saveReorderedDay(container, dayLabel);
+        });
+        // --------------------------------
+
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.className = 'row-checkbox';
@@ -4032,6 +4099,101 @@ function addRowsToContainer(container, dayLabel, anchorBtn = null, startIdx = 0,
         container.appendChild(rowDiv);
     }
     if (anchorBtn) container.appendChild(anchorBtn);
+}
+
+/**
+ * Triggers when a user drag-and-drops a row.
+ * Scrapes the new visual order and writes it back to the database.
+ */
+async function saveReorderedDay(container, dayLabel) {
+    document.getElementById('saveIndicator').innerText = "Reordering...";
+    document.getElementById('saveIndicator').style.display = 'inline-block';
+
+    // 1. Scrape all visual rows in their newly dragged layout
+    const allVisualRows = Array.from(container.querySelectorAll('.cell-row'));
+    const scrapedData = allVisualRows.map(row => {
+        const cb = row.querySelector('.row-checkbox');
+        const rowData = { 
+            occupied: row.getAttribute('data-occupied'), 
+            display: row.style.display,
+            checked: cb ? cb.checked : false,
+            cols: {} 
+        };
+        for (let col = 1; col <= 8; col++) {
+            const el = row.querySelector(`[data-col-index="${col}"]`);
+            let val = ""; let html = "";
+            if (el) {
+                if (col === 5) { val = el.innerText || ""; html = el.innerHTML || ""; }
+                else if (col === 6) { val = el.getAttribute('data-selected') || el.value || ""; }
+                else { val = el.value || ""; }
+                if (val === "..." || val === "+ Add Multi" || val === "Select...") val = "";
+            }
+            rowData.cols[col] = { val: val, html: html };
+        }
+        return rowData;
+    });
+
+    // 2. Revert rows back to numerical ID order to prevent loading bugs on refresh
+    allVisualRows.sort((a, b) => {
+        return parseInt(a.getAttribute('data-row-index')) - parseInt(b.getAttribute('data-row-index'));
+    });
+    
+    allVisualRows.forEach(row => container.appendChild(row));
+    
+    const addBtn = container.querySelector('.add-rows-btn');
+    if (addBtn) container.appendChild(addBtn);
+
+    // 3. Re-inject the scraped data sequentially and save to database
+    for (let i = 0; i < allVisualRows.length; i++) {
+        const targetRow = allVisualRows[i];
+        const sourceData = scrapedData[i];
+        
+        if (sourceData.occupied === 'true') targetRow.setAttribute('data-occupied', 'true');
+        else targetRow.removeAttribute('data-occupied');
+        
+        targetRow.style.display = sourceData.display;
+        
+        const targetCb = targetRow.querySelector('.row-checkbox');
+        if (targetCb) {
+            targetCb.checked = sourceData.checked;
+            if (sourceData.checked) selectedRowIds.add(targetRow.id);
+            else selectedRowIds.delete(targetRow.id);
+        }
+        
+        for (let col = 1; col <= 8; col++) {
+            const targetEl = targetRow.querySelector(`[data-col-index="${col}"]`);
+            if (!targetEl) continue;
+            
+            let content = sourceData.cols[col].val;
+            
+            if (col === 5) {
+                if (sourceData.cols[col].html && sourceData.cols[col].html.includes('<a')) {
+                    targetEl.innerHTML = sourceData.cols[col].html;
+                } else {
+                    targetEl.innerText = content || "...";
+                }
+                applyCellColor(targetEl, content);
+            } else if (col === 6) {
+                targetEl.setAttribute('data-selected', content);
+                if (targetEl.options && targetEl.options[0]) {
+                    targetEl.options[0].text = content ? `Selected: ${content}` : "+ Add Multi";
+                }
+                applyCellColor(targetEl, content);
+            } else {
+                if (targetEl.tagName === 'SELECT' && content !== "") {
+                    const exists = Array.from(targetEl.options).some(opt => opt.value === content);
+                    if (!exists) targetEl.add(new Option(content, content));
+                }
+                targetEl.value = content;
+                applyCellColor(targetEl, content);
+            }
+            
+            saveCell(targetEl, content, col, true);
+        }
+    }
+    
+    if (typeof updateBulkActionUI === 'function') updateBulkActionUI();
+    document.getElementById('saveIndicator').innerText = "Saved";
 }
 
 async function bulkDelete() {

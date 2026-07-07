@@ -616,7 +616,7 @@
     window.rowFilterData = [];
     window.rowNodes = [];
 
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxarc58Rnwagk1HJRU5oJ9tV0YqY9SlfQ4CMbUD4A9CH-vWAfZU4ZxdsmpD0S45qLAR/exec'; 
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxAGGzz8TSK29Zz-nDPw72FnhqoyCkYX-OU0bW8xbZ27QYMZjqaf57GQIgdPD9Bt1It/exec'; 
 
     let globalConfig = { 
         showL2Gate: true, showL3Gate: true, showL4Gate: true,
@@ -865,16 +865,18 @@
         return html;
     }
 
-    function renderGateCells(row, level, maxCount) {
+function renderGateCells(row, level, maxCount) {
         let html = '';
         let type = (level === 'L4') ? 'test' : 'checklist';
         for (let i = 1; i <= maxCount; i++) {
-            // Broad fallback to catch varying column names in your database/sheet
-            let val = row[`${level} Gate CL ${i}`] || row[`${level} Gate ${i}`] || row[`${level} Gate CL${i}`] || '';
-            let link = row[`${level} Gate CL ${i}_Link`] || row[`${level} Gate CL ${i} Link`] || 
-                       row[`${level} Gate ${i}_Link`] || row[`${level} Gate ${i} Link`] || '';
+            
+            // Search the row object for whatever exact column name the backend used
+            let gateKeyRegex = new RegExp(`^${level}\\s*Gate.*?${i}$`, 'i');
+            let gateKey = Object.keys(row).find(k => gateKeyRegex.test(k)) || `${level} Gate CL ${i}`;
+            
+            let val = row[gateKey] || '';
+            let link = row[`${gateKey}_Link`] || row[`${gateKey} Link`] || '';
                        
-            // Notice we removed the .replace('filter-target') to preserve the exact original behavior
             html += renderStackedCell(val, `gate-cell ${level.toLowerCase()}-gate-col`, type, link); 
         }
         return html;

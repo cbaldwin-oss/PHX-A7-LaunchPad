@@ -4685,12 +4685,13 @@ async function lookupColumn5Value(rowNum, dayLabel, isBackground = false) {
         const data = await response.json();
 
         if (data && data.result) {
-            // Check against innerText so HTML tags don't trigger false changes
-            if (data.result !== col5.innerText || (data.url && !col5.innerHTML.includes('onclick="openIframeModal'))) {
+            // Check against innerText so HTML tags don't trigger false changes.
+            // We now check for target="_blank" instead of the iframe function.
+            if (data.result !== col5.innerText || (data.url && !col5.innerHTML.includes('target="_blank"'))) {
                 
-                // If the backend found a URL, wrap the text in an anchor tag that opens the iframe
+                // If the backend found a URL, wrap the text in an anchor tag that opens in a NEW TAB
                 if (data.url) {
-                    col5.innerHTML = `<a href="javascript:void(0)" onclick="openIframeModal('${data.url}')" style="color: inherit; text-decoration: underline; font-weight: bold;">${data.result}</a>`;
+                    col5.innerHTML = `<a href="${data.url}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline; font-weight: bold;">${data.result}</a>`;
                 } else {
                     col5.innerText = data.result;
                 }

@@ -1630,17 +1630,9 @@ async function addSelectedReadyItems() {
     const targetRowsDiv = document.getElementById(`rows-${targetDate}`);
     if (!targetRowsDiv) return alert("The selected date is outside of the active schedule window.");
     
-    // Ensure the rows are initialized for this day (reusing the logic from your Bulk Duplicate)
+   // Ensure the rows are initialized for this day
     if (targetRowsDiv.innerHTML === '') {
-        const addBtn = document.createElement('button');
-        addBtn.className = 'add-rows-btn';
-        addBtn.innerText = "+ Add 5 Rows";
-        addBtn.onclick = (e) => {
-            e.stopPropagation();
-            const hiddenRows = Array.from(targetRowsDiv.querySelectorAll('.cell-row')).filter(r => r.style.display === 'none');
-            for (let i = 0; i < 5 && i < hiddenRows.length; i++) hiddenRows[i].style.display = 'flex';
-            if (hiddenRows.length <= 5) addBtn.style.display = 'none';
-        };
+        const addBtn = createAddRowsButton(targetRowsDiv, targetDate);
         addRowsToContainer(targetRowsDiv, targetDate, addBtn);
     }
     
@@ -3904,16 +3896,39 @@ function generateNumericId(dateStr, index) {
     return (parseInt(numericDate) * 100) + index;
 }
 
-function addRowsToContainer(container, dayLabel, anchorBtn = null) {
-    const MAX_ROWS = 20; 
-    for (let r = 0; r < MAX_ROWS; r++) {
+// Creates a permanent "+ Add 5 Rows" button that generates infinite rows
+function createAddRowsButton(rowsDiv, dayLabel) {
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-rows-btn';
+    addBtn.innerText = "+ Add 5 Rows";
+    addBtn.onclick = (e) => {
+        if (e) e.stopPropagation();
+        const hiddenRows = Array.from(rowsDiv.querySelectorAll('.cell-row')).filter(r => r.style.display === 'none');
+        
+        if (hiddenRows.length > 0) {
+            // Reveal up to 5 existing hidden rows
+            for (let i = 0; i < 5 && i < hiddenRows.length; i++) hiddenRows[i].style.display = 'flex';
+        } else {
+            // Generate 5 brand new rows dynamically
+            const currentCount = rowsDiv.querySelectorAll('.cell-row').length;
+            addRowsToContainer(rowsDiv, dayLabel, null, currentCount, 5);
+            rowsDiv.appendChild(addBtn); // Keep button at the bottom
+        }
+    };
+    return addBtn;
+}
+
+function addRowsToContainer(container, dayLabel, anchorBtn = null, startIdx = 0, count = 20) {
+    for (let r = startIdx; r < startIdx + count; r++) {
         const rowNumericId = generateNumericId(dayLabel, r);
         const rowDiv = document.createElement('div');
         rowDiv.className = 'cell-row';
         rowDiv.id = `row-wrapper-${rowNumericId}`;
         rowDiv.setAttribute('data-date', dayLabel);
         rowDiv.setAttribute('data-row-index', r); // Helpful for ID lookups
-        rowDiv.style.display = (r > 14) ? 'none' : 'flex';
+        
+        // Hide initial overflow rows, but always show dynamically added ones
+        rowDiv.style.display = (r > 14 && startIdx === 0) ? 'none' : 'flex';
 
         const cb = document.createElement('input');
         cb.type = 'checkbox';
@@ -4157,19 +4172,7 @@ function createSections() {
                 
                 // NEW: If rows don't exist yet, build them now
                 if (rowsDiv.innerHTML === '') {
-                    const addBtn = document.createElement('button');
-                    addBtn.className = 'add-rows-btn';
-                    addBtn.innerText = "+ Add 5 Rows";
-                    addBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        const hiddenRows = Array.from(rowsDiv.querySelectorAll('.cell-row'))
-                                                .filter(r => r.style.display === 'none');
-                        for (let i = 0; i < 5 && i < hiddenRows.length; i++) {
-                            hiddenRows[i].style.display = 'flex';
-                        }
-                        if (hiddenRows.length <= 5) addBtn.style.display = 'none';
-                    };
-                    
+                    const addBtn = createAddRowsButton(rowsDiv, dateId);
                     addRowsToContainer(rowsDiv, dateId, addBtn);
                 }
 
@@ -4521,15 +4524,7 @@ async function confirmBulkAction() {
     
     // Build target rows if they haven't been dynamically generated yet
     if (targetRowsDiv.innerHTML === '') {
-        const addBtn = document.createElement('button');
-        addBtn.className = 'add-rows-btn';
-        addBtn.innerText = "+ Add 5 Rows";
-        addBtn.onclick = (e) => {
-            e.stopPropagation();
-            const hiddenRows = Array.from(targetRowsDiv.querySelectorAll('.cell-row')).filter(r => r.style.display === 'none');
-            for (let i = 0; i < 5 && i < hiddenRows.length; i++) hiddenRows[i].style.display = 'flex';
-            if (hiddenRows.length <= 5) addBtn.style.display = 'none';
-        };
+        const addBtn = createAddRowsButton(targetRowsDiv, targetDate);
         addRowsToContainer(targetRowsDiv, targetDate, addBtn);
     }
     
@@ -5041,21 +5036,9 @@ async function loadData(isSilent = false) {
                 if (deletingRows.has(row.id)) return;
 
                 // NEW: If the rows for this date aren't built yet, build them
-                // NEW: If the rows for this date aren't built yet, build them
                 const rowsDiv = document.getElementById(`rows-${row.day_label}`);
                 if (rowsDiv && rowsDiv.innerHTML === '') {
-                    
-                    // --- THE FIX: Create and attach the Add Button during data load ---
-                    const addBtn = document.createElement('button');
-                    addBtn.className = 'add-rows-btn';
-                    addBtn.innerText = "+ Add 5 Rows";
-                    addBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        const hiddenRows = Array.from(rowsDiv.querySelectorAll('.cell-row')).filter(r => r.style.display === 'none');
-                        for (let i = 0; i < 5 && i < hiddenRows.length; i++) hiddenRows[i].style.display = 'flex';
-                        if (hiddenRows.length <= 5) addBtn.style.display = 'none';
-                    };
-                    
+                    const addBtn = createAddRowsButton(rowsDiv, row.day_label);
                     addRowsToContainer(rowsDiv, row.day_label, addBtn); 
                 }
 

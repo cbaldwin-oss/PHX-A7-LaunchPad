@@ -1181,8 +1181,7 @@ html, body {
 
         <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #eee; padding-top: 20px; margin-top: 20px;">
             <button onclick="document.getElementById('schedule-config-modal').style.display='none'" style="padding: 8px 15px; cursor: pointer; background: #f1f3f4; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; color: #555;">Cancel</button>
-            <button onclick="saveNewConfigOrder(); savePhaseRules();" style="padding: 8px 15px; background: #2e7d32; color: white; cursor: pointer; border: none; border-radius: 4px; font-weight: bold;">Save All Settings</button>
-        </div>
+           <button onclick="saveAllSettings(this)" style="padding: 8px 15px; background: #2e7d32; color: white; cursor: pointer; border: none; border-radius: 4px; font-weight: bold;">Save All Settings</button>
     </div>
 </div>
     
@@ -1854,7 +1853,9 @@ function renderEquivalentActivitiesUI() {
         }
         
         activities.forEach(act => {
-            const isChecked = equivalentActivitiesConfig[phase].includes(act) ? 'checked' : '';
+           // Clean whitespace from both sides to guarantee a perfect match
+const cleanConfig = equivalentActivitiesConfig[phase].map(v => v.trim());
+const isChecked = cleanConfig.includes(act.trim()) ? 'checked' : '';
             const item = document.createElement('label');
             item.style.cssText = "display: flex; align-items: center; padding: 6px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f0f0f0; transition: background 0.2s;";
             
@@ -3420,19 +3421,24 @@ function moveCol(index, direction) {
 }
 
 // Grabs the checkbox statuses, new names, and saves
-function saveNewConfigOrder() {
+// Master Save Function: Waits for cloud saves before reloading
+async function saveAllSettings(btn) {
+    // 1. Update UI so user knows it's working
+    const originalText = btn.innerText;
+    btn.innerText = "Saving to Cloud... ⏳";
+    btn.style.opacity = "0.7";
+    btn.disabled = true;
+
+    // 2. Gather Schedule Config
     scheduleColConfig.forEach(col => {
-        // 1. Get the checkbox to see if it's hidden or shown
         const checkbox = document.getElementById(`cfg-col-${col.id}`);
         if (checkbox) col.visible = checkbox.checked;
-        
-        // 2. Get the text box to save any custom name changes
         const nameInput = document.getElementById(`cfg-name-${col.id}`);
-        if (nameInput && nameInput.value.trim() !== '') {
-            col.name = nameInput.value.trim(); 
-        }
+        if (nameInput && nameInput.value.trim() !== '') col.name = nameInput.value.trim(); 
     });
-    // NEW: Save Equivalent Activities Config
+    localStorage.setItem('userScheduleConfig', JSON.stringify(scheduleColConfig));
+
+    // 3. Gather Equivalent Activities Config
     ['L2', 'L3', 'L4'].forEach(phase => {
         const container = document.getElementById(`eq-act-${phase}-list`);
         if (container) {
@@ -3440,18 +3446,27 @@ function saveNewConfigOrder() {
             equivalentActivitiesConfig[phase] = Array.from(checkedBoxes).map(cb => cb.value);
         }
     });
-    // Save Equivalent Activities to Google Sheets instead of Local Storage
+
+    // 4. FIRE ALL CLOUD SAVES AND WAIT FOR THEM TO FINISH
     try {
-        fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'setEqActivities', data: equivalentActivitiesConfig }),
-            mode: 'no-cors'
-        });
+        await Promise.all([
+            // Save Eq Activities
+            fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'setEqActivities', data: equivalentActivitiesConfig }),
+                mode: 'no-cors'
+            }),
+            // Save Phase Rules (Calls your existing function)
+            savePhaseRules()
+        ]);
+        console.log("All settings successfully saved to cloud.");
     } catch (e) {
-        console.error("Failed to save Eq Activities:", e);
+        console.error("Cloud save error:", e);
+        alert("There was an issue saving to Google Sheets, but local changes were applied.");
     }
-    
-    saveScheduleConfig(); // Saves to local storage and reloads the page
+
+    // 5. Finally, reload the page cleanly
+    location.reload(); 
 }
 
 function applyCellColor(element, value) {

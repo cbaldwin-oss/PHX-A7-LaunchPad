@@ -4653,16 +4653,18 @@ async function lookupColumn5Value(rowNum, dayLabel, isBackground = false) {
 
     const currentText = col5.innerText;
 
-    // --- RESTORED: Translate Activity into Phase Level (Level 2, Level 3, Level 4) ---
+    // --- UPDATED: Translate Activity into Phase Level (Case Insensitive) ---
     let phaseToLookup = val3; // Fallback to raw value
-    const cleanVal3 = val3.trim();
     
-    // Check our Equivalent Activities dictionary to see which phase this activity belongs to
-    if (equivalentActivitiesConfig.L2 && equivalentActivitiesConfig.L2.map(v => v.trim()).includes(cleanVal3)) {
+    // Make the selected value lowercase for safe comparison
+    const cleanVal3 = val3.trim().toLowerCase(); 
+    
+    // Safely check our Equivalent Activities dictionary using lowercase
+    if (equivalentActivitiesConfig.L2 && equivalentActivitiesConfig.L2.map(v => v.trim().toLowerCase()).includes(cleanVal3)) {
         phaseToLookup = "Level 2";
-    } else if (equivalentActivitiesConfig.L3 && equivalentActivitiesConfig.L3.map(v => v.trim()).includes(cleanVal3)) {
+    } else if (equivalentActivitiesConfig.L3 && equivalentActivitiesConfig.L3.map(v => v.trim().toLowerCase()).includes(cleanVal3)) {
         phaseToLookup = "Level 3";
-    } else if (equivalentActivitiesConfig.L4 && equivalentActivitiesConfig.L4.map(v => v.trim()).includes(cleanVal3)) {
+    } else if (equivalentActivitiesConfig.L4 && equivalentActivitiesConfig.L4.map(v => v.trim().toLowerCase()).includes(cleanVal3)) {
         phaseToLookup = "Level 4";
     }
 

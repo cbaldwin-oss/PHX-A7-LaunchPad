@@ -854,6 +854,28 @@
         return statusArray.some(item => item.name && s.includes(String(item.name).toLowerCase().trim()));
     }
 
+    function generateGateHeaderHTML(level, maxCount, baseTitle, filterColIndex) {
+        let html = '';
+        for (let i = 1; i <= maxCount; i++) {
+            let title = maxCount > 1 ? `${baseTitle} ${i}` : baseTitle;
+            // Only attach the filter dropdown to the first Gate column to preserve filter logic
+            let filterHtml = (i === 1) ? `<span class="filter-icon" data-col="${filterColIndex}" onclick="toggleFilter(event, ${filterColIndex})">▼</span>` : '';
+            html += `<div class="header-cell gate-cell ${level.toLowerCase()}-gate-col dynamic-gate-header"><div class="title-wrap"><span class="col-title" data-original="${title}">${title}</span>${filterHtml}</div></div>`;
+        }
+        return html;
+    }
+
+    function renderGateCells(row, level, maxCount) {
+        let html = '';
+        let type = (level === 'L4') ? 'test' : 'checklist';
+        for (let i = 1; i <= maxCount; i++) {
+            let val = row[`${level} Gate CL ${i}`];
+            let link = row[`${level} Gate CL ${i}_Link`] || row[`${level} Gate CL ${i} Link`];
+            html += renderStackedCell(val, `gate-cell ${level.toLowerCase()}-gate-col`, type, link).replace('filter-target', ''); 
+        }
+        return html;
+    }
+
     function renderStackedCell(val, extraClasses = '', type = 'checklist', link = '') {
         let id = '', status = '', styleStr = '', rawVal = '';
         if (val && val !== 'N/A' && val !== 'Clear' && val !== '-') {
@@ -1073,16 +1095,32 @@
                 updateHeaderElement('iss-status-title', globalConfig.customHeaders.issStatus, true);
             }
 
-            let actualMaxCols = { l2: 0, l3: 0, l4: 0, iss: 0 };
+            // Added l2Gate, l3Gate, and l4Gate to track dynamic columns (minimum of 1)
+            let actualMaxCols = { l2: 0, l3: 0, l4: 0, iss: 0, l2Gate: 1, l3Gate: 1, l4Gate: 1 };
+            
             rows.forEach(row => {
                 ['L2', 'L3', 'L4'].forEach(level => {
                     let key = level.toLowerCase();
+                    let gateKey = key + 'Gate';
+                    
+                    // Track Max Support CLs
                     for(let i=1; i<=100; i++) {
                         let val = row[`${level} Support CL ${i}`];
                         if(val !== undefined && val !== null) {
                             let clean = String(val).replace(/\(Unknown\)/ig, '').trim();
                             if(clean !== '' && clean !== 'N/A' && clean !== 'Clear' && clean !== '-') {
                                 actualMaxCols[key] = Math.max(actualMaxCols[key], i);
+                            }
+                        }
+                    }
+                    
+                    // Track Max Gate CLs
+                    for(let i=1; i<=20; i++) {
+                        let val = row[`${level} Gate CL ${i}`];
+                        if(val !== undefined && val !== null) {
+                            let clean = String(val).replace(/\(Unknown\)/ig, '').trim();
+                            if(clean !== '' && clean !== 'N/A' && clean !== 'Clear' && clean !== '-') {
+                                actualMaxCols[gateKey] = Math.max(actualMaxCols[gateKey], i);
                             }
                         }
                     }
@@ -1103,11 +1141,32 @@
             document.body.classList.toggle('hide-l3-gate', globalConfig.showL3Gate === false);
             document.body.classList.toggle('hide-l4-gate', globalConfig.showL4Gate === false);
 
+            // Remove old dynamic headers
             document.querySelectorAll('.dynamic-header').forEach(el => el.remove()); 
+            document.querySelectorAll('.dynamic-gate-header').forEach(el => el.remove());
+
+            // Hide the hardcoded static gate headers so we can inject dynamic ones
+            let l2GateCol = document.querySelector('.l2-gate-col:not(.dynamic-gate-header)');
+            if (l2GateCol) l2GateCol.style.display = 'none';
+            let l3GateCol = document.querySelector('.l3-gate-col:not(.dynamic-gate-header)');
+            if (l3GateCol) l3GateCol.style.display = 'none';
+            let l4GateCol = document.querySelector('.l4-gate-col:not(.dynamic-gate-header)');
+            if (l4GateCol) l4GateCol.style.display = 'none';
+
+            // Generate Support Headers (existing)
             if(globalConfig.maxCols.l2 > 0) document.getElementById('l2-supp-header').insertAdjacentHTML('afterend', generateHeaderHTML('L2', globalConfig.maxCols.l2));
             if(globalConfig.maxCols.l3 > 0) document.getElementById('l3-supp-header').insertAdjacentHTML('afterend', generateHeaderHTML('L3', globalConfig.maxCols.l3));
             if(globalConfig.maxCols.l4 > 0) document.getElementById('l4-supp-header').insertAdjacentHTML('afterend', generateHeaderHTML('L4', globalConfig.maxCols.l4));
             if(globalConfig.maxCols.iss > 0) document.getElementById('global-iss-header').insertAdjacentHTML('afterend', generateIssHeaderHTML(globalConfig.maxCols.iss));
+
+            // Generate Dynamic Gate Headers
+            const l2Title = globalConfig.customHeaders?.l2Gate || 'Gate CL';
+            const l3Title = globalConfig.customHeaders?.l3Gate || 'Gate CL';
+            const l4Title = globalConfig.customHeaders?.l4Gate || 'Gate CL';
+
+            document.getElementById('l2-supp-header').insertAdjacentHTML('beforebegin', generateGateHeaderHTML('L2', globalConfig.maxCols.l2Gate, l2Title, 2));
+            document.getElementById('l3-supp-header').insertAdjacentHTML('beforebegin', generateGateHeaderHTML('L3', globalConfig.maxCols.l3Gate, l3Title, 4));
+            document.getElementById('l4-supp-header').insertAdjacentHTML('beforebegin', generateGateHeaderHTML('L4', globalConfig.maxCols.l4Gate, l4Title, 6));
 
             ['l2', 'l3', 'l4'].forEach(lvl => {
                 let btn = document.querySelector(`.expand-btn[data-target="${lvl}-supp"]`);
@@ -1116,10 +1175,11 @@
             let issBtn = document.querySelector(`.expand-btn[data-target="global-iss"]`);
             if(issBtn) issBtn.style.display = globalConfig.maxCols.iss > 0 ? 'flex' : 'none';
 
-            let gateL2 = globalConfig.showL2Gate !== false ? 100 : 0;
-            let gateL3 = globalConfig.showL3Gate !== false ? 100 : 0;
-            let gateL4 = globalConfig.showL4Gate !== false ? 100 : 0;
-            let summaryW = 190; 
+            // Update Header Width calculations to account for multiple gate columns
+            let gateL2 = globalConfig.showL2Gate !== false ? (globalConfig.maxCols.l2Gate * 100) : 0;
+            let gateL3 = globalConfig.showL3Gate !== false ? (globalConfig.maxCols.l3Gate * 100) : 0;
+            let gateL4 = globalConfig.showL4Gate !== false ? (globalConfig.maxCols.l4Gate * 100) : 0;
+            let summaryW = 190;
             
             document.getElementById('group-l2').style.flex = `0 0 ${gateL2 + summaryW}px`;
             document.getElementById('group-l3').style.flex = `0 0 ${gateL3 + summaryW}px`;
@@ -1175,17 +1235,17 @@
                     </div>
                     <div class="phase-gap"></div>
                     
-                    ${renderStackedCell(row['L2 Gate CL 1'], 'gate-cell l2-gate-col', 'checklist', row['L2 Gate CL 1_Link'] || row['L2 Gate CL 1 Link'])}
+                    ${renderGateCells(row, 'L2', globalConfig.maxCols.l2Gate)}
                     <div class="filter-target summary-cell l2-supp-summary divider-right" style="${getDynamicStyle(row['L2 Overall Status'], 'checklist', true)}" data-val="${row['L2 Overall Status'] || 'N/A'}">${row['L2 Overall Status'] || 'N/A'}</div>
                     ${renderSupportCells(row, 'L2', globalConfig.maxCols.l2)}
                     <div class="phase-gap"></div>
                     
-                    ${renderStackedCell(row['L3 Gate CL 1'], 'gate-cell l3-gate-col', 'checklist', row['L3 Gate CL 1_Link'] || row['L3 Gate CL 1 Link'])}
+                    ${renderGateCells(row, 'L3', globalConfig.maxCols.l3Gate)}
                     <div class="filter-target summary-cell l3-supp-summary divider-right" style="${getDynamicStyle(row['L3 Overall Status'], 'checklist', true)}" data-val="${row['L3 Overall Status'] || 'N/A'}">${row['L3 Overall Status'] || 'N/A'}</div>
                     ${renderSupportCells(row, 'L3', globalConfig.maxCols.l3)}
                     <div class="phase-gap"></div>
                     
-                    ${renderStackedCell(row['L4 Gate CL 1'], 'gate-cell l4-gate-col', 'test', row['L4 Gate CL 1_Link'] || row['L4 Gate CL 1 Link'])}
+                    ${renderGateCells(row, 'L4', globalConfig.maxCols.l4Gate)}
                     <div class="filter-target summary-cell l4-supp-summary divider-right" style="${getDynamicStyle(row['L4 Overall Status'], 'test', true)}" data-val="${row['L4 Overall Status'] || 'N/A'}">${row['L4 Overall Status'] || 'N/A'}</div>
                     ${renderSupportCells(row, 'L4', globalConfig.maxCols.l4)}
                     <div class="phase-gap"></div>
@@ -1396,10 +1456,11 @@ window.onload = function() {
             }
             
             let maxCols = globalConfig.maxCols[lvl] || 0;
+            let maxGateCols = globalConfig.maxCols[lvl + 'Gate'] || 1;
             let isGateShown = globalConfig[`show${level.toUpperCase()}Gate`] !== false;
             let isSuppShown = globalConfig[`show${level.toUpperCase()}Supp`] !== false;
 
-            let gateWidth = isGateShown ? 100 : 0;
+            let gateWidth = isGateShown ? (maxGateCols * 100) : 0;
             let summaryWidth = 190;
             let baseWidth = gateWidth + summaryWidth;
             let exactWidth = (state && isSuppShown) ? (baseWidth + (maxCols * 100)) : baseWidth;
@@ -1805,8 +1866,18 @@ window.onload = function() {
                         let val = areaNode ? areaNode.innerText : '';
                         cellHtml = `<td class="shrink-list">${val}</td>`;
                     } else if (opt.type === 'gate') {
-                        let cell = row.querySelector(`.${opt.level}-gate-col`);
-                        cellHtml = extractStackedCellForPdf(cell);
+                        let cells = row.querySelectorAll(`.${opt.level}-gate-col`);
+                        let combinedText = [];
+                        cells.forEach(cell => {
+                            let hdrNode = cell.querySelector('.checklist-header');
+                            if (hdrNode && hdrNode.innerText.trim() !== '-') {
+                                let aTag = hdrNode.querySelector('a');
+                                let text = hdrNode.innerText.trim();
+                                combinedText.push(aTag ? `<a href="${aTag.href}" target="_blank">${text}</a>` : text);
+                            }
+                        });
+                        let display = combinedText.length > 0 ? combinedText.join(', ') : '-';
+                        cellHtml = `<td class="uncolored-cell">${display}</td>`;
                     } else if (opt.type === 'status') {
                         let cell = row.querySelector(`.${opt.level}-supp-summary`);
                         let val = cell ? cell.innerHTML : '-'; 

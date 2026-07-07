@@ -2357,26 +2357,37 @@ async function processCropAndRead() {
     btn.innerText = "Transmitting to Google Vision...";
     status.innerText = "Extracting text...";
     
-    const img = window.ocrImageObj;
+    const imgEl = document.getElementById('crop-img');
     const rect = window.cropRect;
     
-    // Use the native, high-resolution image dimensions
-    const nw = img.naturalWidth;
-    const nh = img.naturalHeight;
+    // 1. Calculate the exact coordinates from the original high-resolution image
+    const nw = imgEl.naturalWidth;
+    const nh = imgEl.naturalHeight;
     
     const sx = nw * rect.leftPct;
     const sy = nh * rect.topPct;
     const sw = nw * rect.widthPct;
     const sh = nh * rect.heightPct;
 
-    // Draw the specific cropped area to a canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = sw;
-    canvas.height = sh;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    // 2. Add a thick white padding border. 
+    // Google Vision works best when text isn't touching the absolute edge of the image.
+    const PADDING = 60;
 
-    // Convert to JPEG for the Vision API
+    const canvas = document.createElement('canvas');
+    canvas.width = sw + (PADDING * 2);
+    canvas.height = sh + (PADDING * 2);
+    const ctx = canvas.getContext('2d');
+    
+    // Fill the background with solid white
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw the specific cropped area into the center of our white canvas
+    // (We also add a slight contrast boost in case the metal nameplate is faded)
+    ctx.filter = 'contrast(1.2)';
+    ctx.drawImage(window.ocrImageObj, sx, sy, sw, sh, PADDING, PADDING, sw, sh);
+
+    // Convert to a high-quality JPEG
     const base64Image = canvas.toDataURL('image/jpeg', 1.0);
 
     try {
@@ -2398,10 +2409,22 @@ async function processCropAndRead() {
                 status.innerText = "Ready.";
             }
         } else {
-            alert("Google Vision couldn't detect legible text in that specific box. Try drawing a tighter box around just the text.");
+            // --- THE VISUAL DEBUGGER ---
+            // If it fails, show the user EXACTLY what was sent to Google Vision
+            document.getElementById('crop-container').innerHTML = `
+                <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#eee;">
+                    <img src="${base64Image}" style="max-width:90%; max-height:90%; object-fit:contain; border: 4px solid red; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+                </div>
+            `;
+            
+            status.innerHTML = "<span style='color:#d32f2f; font-weight:bold;'>Error: See the red box above.</span>";
+            alert("Google Vision couldn't detect legible text.\n\nWe have displayed EXACTLY what was sent to Google inside the red box above. If the image in the red box is black, cut off, or blurry, try taking the photo again in landscape mode.");
+            
+            // Re-purpose the button to restart the camera
+            btn.innerText = "📸 Take New Photo";
+            btn.style.background = "#1976d2";
             btn.disabled = false;
-            btn.innerText = "✅ Read Selected Text";
-            status.innerText = "Ready.";
+            btn.onclick = initTextScanner;
         }
     } catch(err) {
         console.error("OCR Error:", err);

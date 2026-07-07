@@ -4347,12 +4347,20 @@ async function lookupColumn5Value(rowNum, dayLabel, isBackground = false) {
         const data = await response.json();
 
         if (data && data.result) {
-            if (data.result !== currentText) {
-                col5.innerText = data.result;
+            // Check against innerText so HTML tags don't trigger false changes
+            if (data.result !== col5.innerText || (data.url && !col5.innerHTML.includes('href'))) {
+                
+                // If the backend found a URL, wrap the text in an anchor tag!
+                if (data.url) {
+                    col5.innerHTML = `<a href="${data.url}" target="_blank" style="color: inherit; text-decoration: underline; font-weight: bold;">${data.result}</a>`;
+                } else {
+                    col5.innerText = data.result;
+                }
+                
                 applyCellColor(col5, data.result);
                 saveCell(col5, data.result, 5, true);
             }
-        } else if (!isBackground) {
+        }else if (!isBackground) {
             col5.innerText = "NA";
         }
     } catch (e) {

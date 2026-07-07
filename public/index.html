@@ -3433,6 +3433,7 @@ async function completeAppLaunch() {
     try {
         // Load the actual schedule data
         await fetchPHXA7dropdownoptions();
+        await loadEquivalentActivities();
         refreshDropdowns();
         await loadData();
         initRealtimeSync();
@@ -3518,6 +3519,7 @@ if (permissions.isAuthorized) {
     
     // Continue with the rest of the launch sequence
     await fetchPHXA7dropdownoptions();
+    await loadEquivalentActivities();
     initPresence(user.email); 
     refreshDropdowns();
     await loadData();

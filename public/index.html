@@ -4049,7 +4049,8 @@ function saveCell(cell, value, colIndex, isImmediate = false) {
     const failsafeKey = `failsafe-${rowNum}-${colIndex}`;
 
     const performSave = async (isFailsafe = false) => {
-        const currentValue = (cell.tagName === 'SPAN') ? cell.innerText : (cell.getAttribute('data-selected') || cell.value);
+        // --- UPDATED: Save the full innerHTML so the hyperlink is sent to the database ---
+        const currentValue = (cell.tagName === 'SPAN') ? cell.innerHTML : (cell.getAttribute('data-selected') || cell.value);
         const oldValue = cell.getAttribute('data-before-edit') || "";
 
         // Skip saving if it's still "Checking..." or if the value hasn't actually changed
@@ -4685,11 +4686,11 @@ async function lookupColumn5Value(rowNum, dayLabel, isBackground = false) {
 
         if (data && data.result) {
             // Check against innerText so HTML tags don't trigger false changes
-            if (data.result !== col5.innerText || (data.url && !col5.innerHTML.includes('href'))) {
+            if (data.result !== col5.innerText || (data.url && !col5.innerHTML.includes('onclick="openIframeModal'))) {
                 
-                // If the backend found a URL, wrap the text in an anchor tag!
+                // If the backend found a URL, wrap the text in an anchor tag that opens the iframe
                 if (data.url) {
-                    col5.innerHTML = `<a href="${data.url}" target="_blank" style="color: inherit; text-decoration: underline; font-weight: bold;">${data.result}</a>`;
+                    col5.innerHTML = `<a href="javascript:void(0)" onclick="openIframeModal('${data.url}')" style="color: inherit; text-decoration: underline; font-weight: bold;">${data.result}</a>`;
                 } else {
                     col5.innerText = data.result;
                 }
@@ -5402,6 +5403,16 @@ window.addEventListener('message', (event) => {
         }
     }
 });
+
+function openIframeModal(url) {
+    document.getElementById('iframe-modal-content').src = url;
+    document.getElementById('iframe-modal').style.display = 'flex';
+}
+function closeIframeModal() {
+    document.getElementById('iframe-modal').style.display = 'none';
+    document.getElementById('iframe-modal-content').src = "";
+}
+
     </script>
     <div id="bulk-date-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; justify-content:center; align-items:center;">
     <div style="background:white; padding:30px; border-radius:8px; width:350px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
@@ -5414,6 +5425,15 @@ window.addEventListener('message', (event) => {
             <button onclick="closeBulkDateModal()" style="flex:1; padding:12px; border:1px solid #ddd; background:#f5f5f5; border-radius:4px; cursor:pointer; font-weight:bold;">Cancel</button>
             <button onclick="confirmBulkAction()" style="flex:1; padding:12px; background:#2e7d32; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">Confirm</button>
         </div>
+    </div>
+</div>
+<div id="iframe-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10500; align-items: center; justify-content: center;">
+    <div style="background: white; width: 90%; height: 90%; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 4px 30px rgba(0,0,0,0.5);">
+        <div style="padding: 12px 20px; background: #f1f3f4; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; color: #333; font-size: 16px;">Document Viewer</h3>
+            <button onclick="closeIframeModal()" style="background: #d32f2f; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s;">Close</button>
+        </div>
+        <iframe id="iframe-modal-content" src="" style="flex: 1; width: 100%; border: none;"></iframe>
     </div>
 </div>
 </body>

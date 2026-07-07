@@ -2077,6 +2077,8 @@ function stopScanner() {
         window.ocrVideoStream = null;
     }
     
+    window.ocrImageObj = null;
+    window.cropRect = null;
     window.currentScanTargetKey = null;
 }
 
@@ -2164,111 +2166,220 @@ function initQRCodeScanner() {
     });
 }
 
-// --- MODE 2: CUSTOM TARGETED OCR ---
+// --- MODE 2: HIGH-RES PHOTO & CROP OCR ---
+window.ocrImageObj = null;
+window.cropRect = null;
+
 async function initTextScanner() {
+    // 1. Clear other scanners
     if (window.html5QrcodeScanner) window.html5QrcodeScanner.clear();
-    
     if (window.html5Qrcode) {
         window.html5Qrcode.stop().then(() => {
             window.html5Qrcode.clear();
             window.html5Qrcode = null;
         }).catch(e => console.log(e));
     }
-
-    const viewport = document.getElementById('scanner-viewport');
-    viewport.style.border = "none";
-    
-    viewport.innerHTML = `
-        <div style="position: relative; width: 100%; max-height: 350px; background: #000; overflow: hidden; border-radius: 8px; display: flex; align-items: center;">
-            <video id="ocr-video" autoplay playsinline style="width: 100%; height: auto;"></video>
-            <div style="position: absolute; top: 50%; left: 10%; width: 80%; height: 60px; transform: translateY(-50%); border: 2px solid #00ff00; box-shadow: 0 0 0 9999px rgba(0,0,0,0.6); pointer-events: none;"></div>
-        </div>
-        <button id="ocr-capture-btn" onclick="captureAndReadText()" style="width: 100%; margin-top: 15px; padding: 14px; background: #f57c00; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📸 Capture & Read Box</button>
-        <p id="ocr-status-text" style="text-align: center; font-size: 13px; color: #666; margin-top: 10px; min-height: 20px;">Align text inside the green box.</p>
-    `;
-
-    try {
-        window.ocrVideoStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
-        });
-        document.getElementById('ocr-video').srcObject = window.ocrVideoStream;
-    } catch (err) {
-        console.error("Camera error:", err);
-        viewport.innerHTML = `<p style="color: #d32f2f; padding: 20px; text-align: center;">Camera access denied or unavailable.</p>`;
-    }
-}
-
-async function captureAndReadText() {
-    const video = document.getElementById('ocr-video');
-    const statusText = document.getElementById('ocr-status-text');
-    const captureBtn = document.getElementById('ocr-capture-btn');
-
-    if (!video || !video.videoWidth) return;
-
-    captureBtn.disabled = true;
-    captureBtn.innerText = "Transmitting to Google Lens...";
-    statusText.innerHTML = "<strong>Analyzing image via Google Vision API...</strong>";
-
-    // 1. Grab raw video frame
-    const rawCanvas = document.createElement('canvas');
-    rawCanvas.width = video.videoWidth;
-    rawCanvas.height = video.videoHeight;
-    const rawCtx = rawCanvas.getContext('2d');
-    rawCtx.drawImage(video, 0, 0, rawCanvas.width, rawCanvas.height);
-
-    // 2. Calculate crop coordinates based on the green box
-    const scale = video.videoWidth / video.clientWidth;
-    const cropWidth = video.clientWidth * 0.8 * scale;
-    const cropHeight = 60 * scale; 
-    const startX = video.clientWidth * 0.1 * scale;
-    const startY = ((video.clientHeight / 2) - 30) * scale;
-
-    // 3. Create a canvas holding strictly the cropped nameplate area
-    const cropCanvas = document.createElement('canvas');
-    cropCanvas.width = cropWidth;
-    cropCanvas.height = cropHeight;
-    const cropCtx = cropCanvas.getContext('2d');
-    
-    // NO CSS FILTERS, NO PADDING. Feed the raw, natural color photo to the Vision API.
-    cropCtx.drawImage(rawCanvas, startX, startY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-
-    // Stop the video stream
     if (window.ocrVideoStream) {
         window.ocrVideoStream.getTracks().forEach(track => track.stop());
         window.ocrVideoStream = null;
     }
 
-    // Convert to high-quality JPEG
-    const base64Image = cropCanvas.toDataURL('image/jpeg', 1.0);
+    const viewport = document.getElementById('scanner-viewport');
+    viewport.style.border = "none";
+    
+    // 2. Render the Native Camera Button
+    viewport.innerHTML = `
+        <div style="padding: 30px; text-align: center; background: #fff3e0; border-radius: 8px; border: 1px solid #ffcc80;">
+            <p style="margin-top: 0; color: #e65100; font-weight: bold; font-size: 16px;">Take a clear photo of the nameplate</p>
+            <label style="background: #f57c00; color: white; padding: 14px 24px; border-radius: 6px; cursor: pointer; display: inline-block; font-weight: bold; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                📸 Open Native Camera
+                <input type="file" accept="image/*" capture="environment" style="display: none;" onchange="handleOCRImage(event)">
+            </label>
+            <p style="font-size: 12px; color: #666; margin-bottom: 0; margin-top: 15px;">Your device's native camera guarantees the best focus and resolution.</p>
+        </div>
+    `;
+}
+
+// 3. Handle the returned photo
+function handleOCRImage(event) {
+    const file = event.target.files[0];
+    if(!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            window.ocrImageObj = img;
+            renderCropperUI(img);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+// 4. Draw the UI for the user to drag a box over the text
+function renderCropperUI(img) {
+    const viewport = document.getElementById('scanner-viewport');
+    
+    viewport.innerHTML = `
+        <p style="text-align:center; font-weight:bold; color:#1976d2; margin: 0 0 10px 0;">Draw a box around the text</p>
+        <div id="crop-container" style="position:relative; width:100%; max-height:400px; display:flex; justify-content:center; overflow:hidden; touch-action: none; background: #000; border-radius: 8px;">
+            <img id="crop-img" src="${img.src}" style="max-width:100%; max-height:400px; object-fit:contain; pointer-events:none; display:block;">
+            <div id="crop-box" style="position:absolute; border:2px solid #00ff00; background:rgba(0,255,0,0.2); display:none; pointer-events:none;"></div>
+            <div id="crop-touch-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:10; cursor: crosshair;"></div>
+        </div>
+        <button id="ocr-process-btn" onclick="processCropAndRead()" style="width: 100%; margin-top: 15px; padding: 14px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; display:none; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">✅ Read Selected Text</button>
+        <p id="ocr-status-text" style="text-align:center; color:#666; font-size:13px; margin-top:10px;"></p>
+    `;
+
+    const layer = document.getElementById('crop-touch-layer');
+    const box = document.getElementById('crop-box');
+    const imgEl = document.getElementById('crop-img');
+    
+    let startX, startY;
+    let isDrawing = false;
+
+    // Calculate coordinates relative to the image itself
+    const getPos = (e) => {
+        const rect = imgEl.getBoundingClientRect();
+        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        let x = clientX - rect.left;
+        let y = clientY - rect.top;
+        
+        x = Math.max(0, Math.min(x, rect.width));
+        y = Math.max(0, Math.min(y, rect.height));
+        
+        return { x, y, rectWidth: rect.width, rectHeight: rect.height };
+    };
+
+    const onStart = (e) => {
+        e.preventDefault();
+        isDrawing = true;
+        const pos = getPos(e);
+        startX = pos.x;
+        startY = pos.y;
+        box.style.left = startX + 'px';
+        box.style.top = startY + 'px';
+        box.style.width = '0px';
+        box.style.height = '0px';
+        box.style.display = 'block';
+        document.getElementById('ocr-process-btn').style.display = 'none';
+    };
+
+    const onMove = (e) => {
+        if (!isDrawing) return;
+        e.preventDefault();
+        const pos = getPos(e);
+        
+        const currentX = pos.x;
+        const currentY = pos.y;
+
+        const left = Math.min(startX, currentX);
+        const top = Math.min(startY, currentY);
+        const width = Math.abs(currentX - startX);
+        const height = Math.abs(currentY - startY);
+
+        // Draw the visual green box
+        box.style.left = left + 'px';
+        box.style.top = top + 'px';
+        box.style.width = width + 'px';
+        box.style.height = height + 'px';
+        
+        // Save the math percentages for cropping the true high-res image
+        window.cropRect = {
+            leftPct: left / pos.rectWidth,
+            topPct: top / pos.rectHeight,
+            widthPct: width / pos.rectWidth,
+            heightPct: height / pos.rectHeight
+        };
+    };
+
+    const onEnd = (e) => {
+        if (!isDrawing) return;
+        isDrawing = false;
+        // Only show the button if they drew a box large enough (prevents accidental taps)
+        if (window.cropRect && window.cropRect.widthPct > 0.02 && window.cropRect.heightPct > 0.02) {
+            document.getElementById('ocr-process-btn').style.display = 'block';
+        } else {
+            box.style.display = 'none';
+            window.cropRect = null;
+        }
+    };
+
+    layer.addEventListener('mousedown', onStart);
+    layer.addEventListener('mousemove', onMove);
+    layer.addEventListener('mouseup', onEnd);
+    layer.addEventListener('mouseleave', onEnd);
+    
+    layer.addEventListener('touchstart', onStart, {passive: false});
+    layer.addEventListener('touchmove', onMove, {passive: false});
+    layer.addEventListener('touchend', onEnd);
+}
+
+// 5. Crop the high-res image and send to Google
+async function processCropAndRead() {
+    if (!window.ocrImageObj || !window.cropRect) return;
+
+    const btn = document.getElementById('ocr-process-btn');
+    const status = document.getElementById('ocr-status-text');
+    btn.disabled = true;
+    btn.innerText = "Transmitting to Google Vision...";
+    status.innerText = "Extracting text...";
+    
+    const img = window.ocrImageObj;
+    const rect = window.cropRect;
+    
+    // Use the native, high-resolution image dimensions
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+    
+    const sx = nw * rect.leftPct;
+    const sy = nh * rect.topPct;
+    const sw = nw * rect.widthPct;
+    const sh = nh * rect.heightPct;
+
+    // Draw the specific cropped area to a canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+    // Convert to JPEG for the Vision API
+    const base64Image = canvas.toDataURL('image/jpeg', 1.0);
 
     try {
-        // Send the image to your Apps Script backend
         const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             body: JSON.stringify({ action: 'ocrImage', image: base64Image })
         });
-
         const result = await response.json();
-
+        
         if (result.success && result.text && result.text.trim()) {
-            // Clean up excess line breaks
             const extractedText = result.text.replace(/\n+/g, ' ').replace(/[|\[\]{}]/g, '').trim();
-            
             const userVerifiedText = prompt("Verify and edit the scanned text if necessary:", extractedText);
             
             if (userVerifiedText !== null && userVerifiedText.trim() !== "") {
                 fillAttributeField(userVerifiedText.trim());
             } else {
-                initTextScanner(); // Restart if they hit cancel
+                btn.disabled = false;
+                btn.innerText = "✅ Read Selected Text";
+                status.innerText = "Ready.";
             }
         } else {
-            alert("Google Vision couldn't detect legible text. Make sure the text is fully inside the green box and well-lit.");
-            initTextScanner(); 
+            alert("Google Vision couldn't detect legible text in that specific box. Try drawing a tighter box around just the text.");
+            btn.disabled = false;
+            btn.innerText = "✅ Read Selected Text";
+            status.innerText = "Ready.";
         }
-    } catch (err) {
-        console.error("Cloud OCR Error:", err);
-        alert("A connection error occurred while sending the image to the cloud.");
-        initTextScanner();
+    } catch(err) {
+        console.error("OCR Error:", err);
+        alert("A connection error occurred.");
+        btn.disabled = false;
+        btn.innerText = "✅ Read Selected Text";
+        status.innerText = "Error.";
     }
 }
 

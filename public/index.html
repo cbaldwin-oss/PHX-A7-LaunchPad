@@ -5041,10 +5041,22 @@ async function loadData(isSilent = false) {
                 if (deletingRows.has(row.id)) return;
 
                 // NEW: If the rows for this date aren't built yet, build them
+                // NEW: If the rows for this date aren't built yet, build them
                 const rowsDiv = document.getElementById(`rows-${row.day_label}`);
                 if (rowsDiv && rowsDiv.innerHTML === '') {
-                    // Logic to build rows without the toggle behavior
-                    addRowsToContainer(rowsDiv, row.day_label); 
+                    
+                    // --- THE FIX: Create and attach the Add Button during data load ---
+                    const addBtn = document.createElement('button');
+                    addBtn.className = 'add-rows-btn';
+                    addBtn.innerText = "+ Add 5 Rows";
+                    addBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        const hiddenRows = Array.from(rowsDiv.querySelectorAll('.cell-row')).filter(r => r.style.display === 'none');
+                        for (let i = 0; i < 5 && i < hiddenRows.length; i++) hiddenRows[i].style.display = 'flex';
+                        if (hiddenRows.length <= 5) addBtn.style.display = 'none';
+                    };
+                    
+                    addRowsToContainer(rowsDiv, row.day_label, addBtn); 
                 }
 
                 const wrapper = document.getElementById(`row-wrapper-${row.id}`);

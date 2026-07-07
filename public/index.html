@@ -1812,8 +1812,30 @@ function switchMainView(viewType, btn) {
     }
 }
 
-// --- EQUIVALENT ACTIVITIES CONFIGURATION ---
-let equivalentActivitiesConfig = JSON.parse(localStorage.getItem('equivalentActivitiesConfig')) || { L2: [], L3: [], L4: [] };
+let equivalentActivitiesConfig = { L2: [], L3: [], L4: [] };
+
+async function loadEquivalentActivities() {
+    const phases = ['L2', 'L3', 'L4'];
+    
+    // Show a temporary loading state
+    phases.forEach(phase => {
+        const container = document.getElementById(`eq-act-${phase}-list`);
+        if (container) container.innerHTML = '<div style="color: #999; font-size: 12px; padding: 5px; text-align: center;">Loading from Google Sheets...</div>';
+    });
+    
+    try {
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getEqActivities`);
+        const data = await response.json();
+        if (data.status === 'success') {
+            equivalentActivitiesConfig = data.data;
+        }
+    } catch (e) {
+        console.error("Failed to load Eq Activities:", e);
+    }
+    
+    // Render the checklists now that we have the data from the sheet
+    renderEquivalentActivitiesUI();
+}
 
 // Helper to render the checklists
 function renderEquivalentActivitiesUI() {
@@ -1848,6 +1870,7 @@ function renderEquivalentActivitiesUI() {
         });
     });
 }
+
 // --- ASSET ATTRIBUTES LOGIC ---
 let cachedAttributesData = [];
 
@@ -3384,7 +3407,7 @@ function openScheduleConfigModal() {
     
     document.getElementById('schedule-config-modal').style.display = 'flex';
     // NEW: Render the Equivalent Activities checklists
-    renderEquivalentActivitiesUI();
+    loadEquivalentActivities();
 }
 
 // Helper to swap array items
@@ -3417,7 +3440,16 @@ function saveNewConfigOrder() {
             equivalentActivitiesConfig[phase] = Array.from(checkedBoxes).map(cb => cb.value);
         }
     });
-    localStorage.setItem('equivalentActivitiesConfig', JSON.stringify(equivalentActivitiesConfig));
+    // Save Equivalent Activities to Google Sheets instead of Local Storage
+    try {
+        fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'setEqActivities', data: equivalentActivitiesConfig }),
+            mode: 'no-cors'
+        });
+    } catch (e) {
+        console.error("Failed to save Eq Activities:", e);
+    }
     
     saveScheduleConfig(); // Saves to local storage and reloads the page
 }

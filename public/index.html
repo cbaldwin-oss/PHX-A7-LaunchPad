@@ -2206,8 +2206,8 @@ async function captureAndReadText() {
     if (!video || !video.videoWidth) return;
 
     captureBtn.disabled = true;
-    captureBtn.innerText = "Transmitting to Google...";
-    statusText.innerHTML = "<strong>Analyzing image via Google Vision...</strong>";
+    captureBtn.innerText = "Transmitting to Google Lens...";
+    statusText.innerHTML = "<strong>Analyzing image via Google Vision API...</strong>";
 
     // 1. Grab raw video frame
     const rawCanvas = document.createElement('canvas');
@@ -2223,28 +2223,14 @@ async function captureAndReadText() {
     const startX = video.clientWidth * 0.1 * scale;
     const startY = ((video.clientHeight / 2) - 30) * scale;
 
-    // --- THE FIX: SCALE AND PAD FOR GOOGLE OCR ---
-    const scaleFactor = 2; // Double resolution
-    const padding = 60;    // Add a thick white border so Google sees a "Document"
-
+    // 3. Create a canvas holding strictly the cropped nameplate area
     const cropCanvas = document.createElement('canvas');
-    cropCanvas.width = (cropWidth * scaleFactor) + (padding * 2);
-    cropCanvas.height = (cropHeight * scaleFactor) + (padding * 2);
+    cropCanvas.width = cropWidth;
+    cropCanvas.height = cropHeight;
     const cropCtx = cropCanvas.getContext('2d');
     
-    // Fill the background with solid white
-    cropCtx.fillStyle = '#ffffff';
-    cropCtx.fillRect(0, 0, cropCanvas.width, cropCanvas.height);
-
-    // Grayscale and slight contrast boost to help the engine read stamped metal
-    cropCtx.filter = 'grayscale(100%) contrast(1.2)';
-
-    // Draw the video crop into the center of our white "document"
-    cropCtx.drawImage(
-        rawCanvas, 
-        startX, startY, cropWidth, cropHeight, 
-        padding, padding, cropWidth * scaleFactor, cropHeight * scaleFactor
-    );
+    // NO CSS FILTERS, NO PADDING. Feed the raw, natural color photo to the Vision API.
+    cropCtx.drawImage(rawCanvas, startX, startY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
 
     // Stop the video stream
     if (window.ocrVideoStream) {
@@ -2252,8 +2238,8 @@ async function captureAndReadText() {
         window.ocrVideoStream = null;
     }
 
-    // Use JPEG format (Drive OCR prefers JPEG over PNG for physical photos)
-    const base64Image = cropCanvas.toDataURL('image/jpeg', 0.95);
+    // Convert to high-quality JPEG
+    const base64Image = cropCanvas.toDataURL('image/jpeg', 1.0);
 
     try {
         // Send the image to your Apps Script backend
@@ -2264,8 +2250,8 @@ async function captureAndReadText() {
 
         const result = await response.json();
 
-        // Check if result.text actually exists and isn't empty
         if (result.success && result.text && result.text.trim()) {
+            // Clean up excess line breaks
             const extractedText = result.text.replace(/\n+/g, ' ').replace(/[|\[\]{}]/g, '').trim();
             
             const userVerifiedText = prompt("Verify and edit the scanned text if necessary:", extractedText);
@@ -2273,10 +2259,10 @@ async function captureAndReadText() {
             if (userVerifiedText !== null && userVerifiedText.trim() !== "") {
                 fillAttributeField(userVerifiedText.trim());
             } else {
-                initTextScanner(); 
+                initTextScanner(); // Restart if they hit cancel
             }
         } else {
-            alert("Google's Vision engine couldn't detect legible text. Make sure the text is fully inside the green box and well-lit.");
+            alert("Google Vision couldn't detect legible text. Make sure the text is fully inside the green box and well-lit.");
             initTextScanner(); 
         }
     } catch (err) {

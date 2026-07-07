@@ -2217,15 +2217,15 @@ function handleOCRImage(event) {
     reader.readAsDataURL(file);
 }
 
-// 4. Draw the UI for the user to drag a box over the text
+// 4. Draw the UI and calculate the EXACT rendered image dimensions
 function renderCropperUI(img) {
     const viewport = document.getElementById('scanner-viewport');
     
     viewport.innerHTML = `
         <p style="text-align:center; font-weight:bold; color:#1976d2; margin: 0 0 10px 0;">Draw a box around the text</p>
-        <div id="crop-container" style="position:relative; width:100%; max-height:400px; display:flex; justify-content:center; overflow:hidden; touch-action: none; background: #000; border-radius: 8px;">
-            <img id="crop-img" src="${img.src}" style="max-width:100%; max-height:400px; object-fit:contain; pointer-events:none; display:block;">
-            <div id="crop-box" style="position:absolute; border:2px solid #00ff00; background:rgba(0,255,0,0.2); display:none; pointer-events:none;"></div>
+        <div id="crop-container" style="position:relative; width:100%; height:400px; display:flex; justify-content:center; align-items:center; overflow:hidden; touch-action: none; background: #000; border-radius: 8px;">
+            <img id="crop-img" src="${img.src}" style="max-width:100%; max-height:100%; object-fit:contain; pointer-events:none; display:block;">
+            <div id="crop-box" style="position:absolute; border:2px solid #00ff00; background:rgba(0,255,0,0.2); display:none; pointer-events:none; z-index:5;"></div>
             <div id="crop-touch-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:10; cursor: crosshair;"></div>
         </div>
         <button id="ocr-process-btn" onclick="processCropAndRead()" style="width: 100%; margin-top: 15px; padding: 14px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; display:none; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">✅ Read Selected Text</button>
@@ -2238,30 +2238,61 @@ function renderCropperUI(img) {
     
     let startX, startY;
     let isDrawing = false;
+    let renderData = {};
 
-    // Calculate coordinates relative to the image itself
-    const getPos = (e) => {
+    // --- THE FIX: Calculate exactly where the photo sits inside the black box ---
+    const calculateRenderedImage = () => {
         const rect = imgEl.getBoundingClientRect();
+        const imgRatio = imgEl.naturalWidth / imgEl.naturalHeight;
+        const containerRatio = rect.width / rect.height;
+        
+        let w = rect.width;
+        let h = rect.height;
+        let offX = 0;
+        let offY = 0;
+        
+        // Account for letterboxing (black bars)
+        if (imgRatio > containerRatio) {
+            h = rect.width / imgRatio;
+            offY = (rect.height - h) / 2;
+        } else {
+            w = rect.height * imgRatio;
+            offX = (rect.width - w) / 2;
+        }
+        const layerRect = layer.getBoundingClientRect();
+        return { w, h, offX, offY, layerLeft: layerRect.left, layerTop: layerRect.top };
+    };
+
+    const getPos = (e) => {
         let clientX = e.touches ? e.touches[0].clientX : e.clientX;
         let clientY = e.touches ? e.touches[0].clientY : e.clientY;
         
-        let x = clientX - rect.left;
-        let y = clientY - rect.top;
+        // 1. Get touch coordinate relative to the container
+        let x = clientX - renderData.layerLeft;
+        let y = clientY - renderData.layerTop;
         
-        x = Math.max(0, Math.min(x, rect.width));
-        y = Math.max(0, Math.min(y, rect.height));
+        // 2. Subtract the black letterbox bars to get coordinate relative to the PHOTO
+        x = x - renderData.offX;
+        y = y - renderData.offY;
         
-        return { x, y, rectWidth: rect.width, rectHeight: rect.height };
+        // 3. Prevent dragging outside the photo boundaries
+        x = Math.max(0, Math.min(x, renderData.w));
+        y = Math.max(0, Math.min(y, renderData.h));
+        
+        return { x, y };
     };
 
     const onStart = (e) => {
         e.preventDefault();
         isDrawing = true;
+        renderData = calculateRenderedImage();
         const pos = getPos(e);
         startX = pos.x;
         startY = pos.y;
-        box.style.left = startX + 'px';
-        box.style.top = startY + 'px';
+        
+        // Visually draw the box (adding the offset back so it matches the screen)
+        box.style.left = (startX + renderData.offX) + 'px';
+        box.style.top = (startY + renderData.offY) + 'px';
         box.style.width = '0px';
         box.style.height = '0px';
         box.style.display = 'block';
@@ -2281,25 +2312,23 @@ function renderCropperUI(img) {
         const width = Math.abs(currentX - startX);
         const height = Math.abs(currentY - startY);
 
-        // Draw the visual green box
-        box.style.left = left + 'px';
-        box.style.top = top + 'px';
+        box.style.left = (left + renderData.offX) + 'px';
+        box.style.top = (top + renderData.offY) + 'px';
         box.style.width = width + 'px';
         box.style.height = height + 'px';
         
-        // Save the math percentages for cropping the true high-res image
+        // Save the PERFECT math percentages for the high-res crop
         window.cropRect = {
-            leftPct: left / pos.rectWidth,
-            topPct: top / pos.rectHeight,
-            widthPct: width / pos.rectWidth,
-            heightPct: height / pos.rectHeight
+            leftPct: left / renderData.w,
+            topPct: top / renderData.h,
+            widthPct: width / renderData.w,
+            heightPct: height / renderData.h
         };
     };
 
     const onEnd = (e) => {
         if (!isDrawing) return;
         isDrawing = false;
-        // Only show the button if they drew a box large enough (prevents accidental taps)
         if (window.cropRect && window.cropRect.widthPct > 0.02 && window.cropRect.heightPct > 0.02) {
             document.getElementById('ocr-process-btn').style.display = 'block';
         } else {

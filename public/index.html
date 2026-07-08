@@ -5103,12 +5103,26 @@ function autoCleanUI() {
 /**
  * View Switcher: Show Request Access Screen
  */
-function switchToRequestView() {
+async function switchToRequestView() {
     document.getElementById('auth-login-view').style.display = 'none';
     document.getElementById('auth-request-view').style.display = 'block';
     document.getElementById('auth-error').style.display = 'none';
     document.getElementById('auth-success').style.display = 'none';
-    fetchPHXA7dropdownoptions(); // Ensure company list is loaded
+    
+    // 1. Wait for the company list to finish downloading
+    await fetchPHXA7dropdownoptions(); 
+    
+    // 2. Inject the Trade Partners (Col 6) into the dropdown
+    const companySelect = document.getElementById('request-company-select');
+    if (companySelect && window.dropdownData && window.dropdownData.col6) {
+        // Reset the dropdown
+        companySelect.innerHTML = '<option value="">Select Company...</option>';
+        
+        // Add the companies dynamically
+        window.dropdownData.col6.forEach(company => {
+            companySelect.add(new Option(company, company));
+        });
+    }
 }
 
 /**

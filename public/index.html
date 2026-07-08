@@ -2188,20 +2188,9 @@ function displayAssetDetails(assetObj, assetName) {
     });
 }
 
-// ==========================================
-// MULTI-BOX NAMEPLATE SCANNER LOGIC
-// ==========================================
-window.multiScanState = {
-    assetName: null,
-    activeAttribute: null,
-    boxes: [], 
-    imageObj: null
-};
-
-function startQRScanner(assetName, groupName) {
-    // Save the group name to state so the mapper can reference it
+function startQRScanner(assetName, groupName) { // --- NEW: Accepts groupName ---
     window.multiScanState.assetName = assetName;
-    window.multiScanState.groupName = groupName;
+    window.multiScanState.groupName = groupName; // Save it to state
     
     document.getElementById('scanner-modal-title').innerText = `Scan QR: ${assetName} (${groupName})`;
     document.getElementById('scanner-modal').style.display = 'flex';
@@ -2241,6 +2230,7 @@ function startQRScanner(assetName, groupName) {
 }
 
 function showQRMappingUI(decodedText) {
+    // Advanced Lookahead: Stops grabbing text the moment it hits a comma, newline, pipe, or the next recognizable keyword
     let modelMatch = decodedText.match(/(?:model|mn|ref|p\/n|part(?:\s*no\.?))[\s:=]+(.*?)(?=\s*(?:serial|s\/n|sn|mfg|manufacturer|make|date|volts|amps|hz)|[,;\n|]|$)/i);
     let serialMatch = decodedText.match(/(?:serial|sn|s\/n)[\s:=]+(.*?)(?=\s*(?:model|mn|ref|p\/n|part|mfg|manufacturer|make|date|volts|amps|hz)|[,;\n|]|$)/i);
     let mfgMatch = decodedText.match(/(?:manufacturer|mfg|make)[\s:=]+(.*?)(?=\s*(?:model|mn|ref|p\/n|part|serial|s\/n|sn|date|volts|amps|hz)|[,;\n|]|$)/i);
@@ -2249,16 +2239,17 @@ function showQRMappingUI(decodedText) {
     let serial = serialMatch ? serialMatch[1].replace(/[\/\\\-\s]+$/, '').trim() : "";
     let mfg = mfgMatch ? mfgMatch[1].replace(/[\/\\\-\s]+$/, '').trim() : "";
 
-    // --- NEW: Target ONLY the inputs inside the active group ---
-    const safeGroup = window.multiScanState.groupName.replace(/"/g, '\\"');
-    const attrInputs = document.querySelectorAll(`.attr-input-field[data-group="${safeGroup}"]`);
-    
+    // --- NEW: Filter inputs strictly by the active group ---
+    const allInputs = Array.from(document.querySelectorAll('.attr-input-field'));
+    const attrInputs = allInputs.filter(input => {
+        const inputGroup = input.getAttribute('data-group').replace(/&quot;/g, '"');
+        return !window.multiScanState.groupName || inputGroup === window.multiScanState.groupName;
+    });
+
     let optionsHtml = '<option value="">-- Do Not Assign --</option>';
     attrInputs.forEach(input => {
         const key = input.getAttribute('data-key');
         let display = key.includes(':') ? key.split(':')[1].trim() : key;
-        
-        // Removed the prefix display since everything in the dropdown belongs to the same group now
         optionsHtml += `<option value="${key.replace(/"/g, '&quot;')}">${display}</option>`;
     });
 
@@ -2271,10 +2262,10 @@ function showQRMappingUI(decodedText) {
             </div>
             
             <div style="display:flex; flex-direction:column; gap:10px;">
-                ${createMappingRow('Manufacturer', mfg, optionsHtml)}
-                ${createMappingRow('Model', model, optionsHtml)}
-                ${createMappingRow('Serial', serial, optionsHtml)}
-                ${createMappingRow('Raw Text', decodedText, optionsHtml)}
+                ${createMappingRow('Manufacturer', 'qr-map-manufacturer', mfg, optionsHtml)}
+                ${createMappingRow('Model', 'qr-map-model', model, optionsHtml)}
+                ${createMappingRow('Serial', 'qr-map-serial', serial, optionsHtml)}
+                ${createMappingRow('Raw Text', 'qr-map-rawtext', decodedText, optionsHtml)}
             </div>
             
             <div style="display:flex; gap:10px; margin-top:20px;">
@@ -2284,12 +2275,10 @@ function showQRMappingUI(decodedText) {
         </div>
     `;
 
-    // Attempt to auto-map the dropdowns based on keywords
     setTimeout(() => {
         const autoMap = (id, keywords) => {
             const select = document.querySelector(`select[data-val-id="${id}"]`);
             const valInput = document.getElementById(id);
-            // Only auto-map if we actually extracted a value, or if it's the raw text
             if (!select || (!valInput.value.trim() && id !== 'qr-map-rawtext-val')) return;
             
             for (let i = 0; i < select.options.length; i++) {
@@ -2492,42 +2481,14 @@ function applyQRMapping() {
     stopScanner();
 }
 
-function startMultiScanner(assetName) {
-    window.multiScanState = {
-        assetName: assetName,
-        activeAttribute: null,
-        boxes: [],
-        imageObj: null
-    };
-    
-    document.getElementById('scanner-modal-title').innerText = `Scan Nameplate: ${assetName}`;
-    document.getElementById('scanner-modal').style.display = 'flex'; 
-    
-    const modalBox = document.querySelector('#scanner-modal > div');
-    if (modalBox) {
-        modalBox.style.width = '450px';
-        modalBox.style.height = 'auto';
-    }
+window.multiScanState = {
+    assetName: null,
+    groupName: null, // --- NEW: Track the specific group ---
+    activeAttribute: null,
+    boxes: [], 
+    imageObj: null
+};
 
-    const viewport = document.getElementById('scanner-viewport');
-    viewport.style.border = "none";
-    viewport.style.display = "block";
-    viewport.style.height = "auto";
-    
-    viewport.innerHTML = `
-        <div style="padding: 30px; text-align: center; background: #fff3e0; border-radius: 8px; border: 1px solid #ffcc80;">
-            <p style="margin-top: 0; color: #e65100; font-weight: bold; font-size: 16px;">Take a clear photo of the nameplate</p>
-            <label style="background: #f57c00; color: white; padding: 14px 24px; border-radius: 6px; cursor: pointer; display: inline-block; font-weight: bold; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                📸 Open Native Camera
-                <input type="file" accept="image/*" capture="environment" style="display: none;" onchange="handleMultiOCRImage(event)">
-            </label>
-            <p style="font-size: 12px; color: #666; margin-bottom: 0; margin-top: 15px;">Your device's native camera guarantees the best focus and resolution.</p>
-        </div>
-    `;
-    document.getElementById('scanner-mode-toggles').style.display = 'none';
-}
-
-// Update stopScanner slightly below it:
 function stopScanner() {
     document.getElementById('scanner-modal').style.display = 'none';
     
@@ -2556,6 +2517,42 @@ function handleMultiOCRImage(event) {
     reader.readAsDataURL(file);
 }
 
+function startMultiScanner(assetName, groupName) { // --- NEW: Accepts groupName ---
+    window.multiScanState = {
+        assetName: assetName,
+        groupName: groupName, // Save it
+        activeAttribute: null,
+        boxes: [],
+        imageObj: null
+    };
+    
+    document.getElementById('scanner-modal-title').innerText = `Scan Photo: ${assetName} (${groupName})`;
+    document.getElementById('scanner-modal').style.display = 'flex'; 
+    
+    const modalBox = document.querySelector('#scanner-modal > div');
+    if (modalBox) {
+        modalBox.style.width = '450px';
+        modalBox.style.height = 'auto';
+    }
+
+    const viewport = document.getElementById('scanner-viewport');
+    viewport.style.border = "none";
+    viewport.style.display = "block";
+    viewport.style.height = "auto";
+    
+    viewport.innerHTML = `
+        <div style="padding: 30px; text-align: center; background: #fff3e0; border-radius: 8px; border: 1px solid #ffcc80;">
+            <p style="margin-top: 0; color: #e65100; font-weight: bold; font-size: 16px;">Take a clear photo of the ${groupName} nameplate</p>
+            <label style="background: #f57c00; color: white; padding: 14px 24px; border-radius: 6px; cursor: pointer; display: inline-block; font-weight: bold; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                📸 Open Native Camera
+                <input type="file" accept="image/*" capture="environment" style="display: none;" onchange="handleMultiOCRImage(event)">
+            </label>
+            <p style="font-size: 12px; color: #666; margin-bottom: 0; margin-top: 15px;">Your device's native camera guarantees the best focus and resolution.</p>
+        </div>
+    `;
+    document.getElementById('scanner-mode-toggles').style.display = 'none';
+}
+
 function renderMultiCropperUI(img) {
     const viewport = document.getElementById('scanner-viewport');
     const modalBox = document.querySelector('#scanner-modal > div');
@@ -2569,8 +2566,13 @@ function renderMultiCropperUI(img) {
     viewport.style.height = '100%';
     viewport.style.flex = '1';
 
-    // Gather attributes from the currently displayed inputs
-    const attrInputs = document.querySelectorAll('.attr-input-field');
+    // --- NEW: Filter buttons strictly by the active group ---
+    const allInputs = Array.from(document.querySelectorAll('.attr-input-field'));
+    const attrInputs = allInputs.filter(input => {
+        const inputGroup = input.getAttribute('data-group').replace(/&quot;/g, '"');
+        return !window.multiScanState.groupName || inputGroup === window.multiScanState.groupName;
+    });
+
     let attrHtml = '';
     attrInputs.forEach(input => {
         const key = input.getAttribute('data-key');

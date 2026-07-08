@@ -3770,16 +3770,19 @@ async function saveAllSettings(btn) {
 function applyCellColor(element, value) {
     if (!element) return;
     
+    // --- NEW: Safely extract plain text so HTML tags (like <a>) aren't evaluated ---
     let val = value || element.getAttribute('data-selected') || element.value || "";
+    if (element.tagName === 'SPAN') {
+        val = element.innerText || val;
+    }
+    
     const cleanVal = val.toString().trim();
     const lowerVal = cleanVal.toLowerCase();
 
     // --- THE FIX: Update Column 6 Display Label ---
     if (element.id && element.id.endsWith("-c6") && element.tagName === "SELECT") {
         if (element.options && element.options[0]) {
-            // Set the first option text to the selected values
             element.options[0].text = cleanVal ? `Selected: ${cleanVal}` : "+ Add Multi";
-            // Ensure the dropdown stays on this 'label' option
             element.selectedIndex = 0;
         }
     }
@@ -3798,21 +3801,27 @@ function applyCellColor(element, value) {
         element.style.height = "40px";
     }
 
-    // --- Color Logic (Existing) ---
-    if (cleanVal === "" || lowerVal === "select..." || lowerVal === "...") {
+    // --- Color Logic (Expanded to catch all standard statuses) ---
+    if (cleanVal === "" || lowerVal === "select..." || lowerVal === "..." || lowerVal === "na" || lowerVal.includes("no rule matched")) {
         element.style.backgroundColor = "#f9f9f9";
         element.style.color = "#666";
         return;
     }
 
+    // Default color (Light Blue)
     element.style.backgroundColor = "#e1f5fe";
     element.style.color = "#01579b";
 
-    if (lowerVal.includes("high") || lowerVal.includes("pass") || lowerVal.includes(" 4") || lowerVal.includes("ready")) {
+    // Green: Pass, High, Ready, Completed, Closed, Clear, 4
+    if (lowerVal.includes("high") || lowerVal.includes("pass") || lowerVal.includes(" 4") || lowerVal.includes("ready") || lowerVal.includes("completed") || lowerVal.includes("closed") || lowerVal.includes("clear")) {
         element.style.backgroundColor = "#c8e6c9"; element.style.color = "#1b5e20";
-    } else if (lowerVal.includes("med") || lowerVal.includes("hold") || lowerVal.includes(" 2")) {
+    } 
+    // Yellow: Med, Hold, In Progress, Pending, 2, Checking
+    else if (lowerVal.includes("med") || lowerVal.includes("hold") || lowerVal.includes(" 2") || lowerVal.includes("progress") || lowerVal.includes("pending") || lowerVal.includes("checking")) {
         element.style.backgroundColor = "#fff9c4"; element.style.color = "#f57f17";
-    } else if (lowerVal.includes("open") || lowerVal.includes("fail") || lowerVal.includes("incomplete")) {
+    } 
+    // Red: Open, Fail, Incomplete, Issue, Rejected
+    else if (lowerVal.includes("open") || lowerVal.includes("fail") || lowerVal.includes("incomplete") || lowerVal.includes("issue") || lowerVal.includes("rejected")) {
         element.style.backgroundColor = "#ffcdd2"; element.style.color = "#b71c1c";
     }
 }
@@ -4843,7 +4852,6 @@ async function lookupColumn5Value(rowNum, dayLabel, isBackground = false) {
 
         if (data && data.result) {
             // Check against innerText so HTML tags don't trigger false changes.
-            // We now check for target="_blank" instead of the iframe function.
             if (data.result !== col5.innerText || (data.url && !col5.innerHTML.includes('target="_blank"'))) {
                 
                 // If the backend found a URL, wrap the text in an anchor tag that opens in a NEW TAB
@@ -4853,11 +4861,15 @@ async function lookupColumn5Value(rowNum, dayLabel, isBackground = false) {
                     col5.innerText = data.result;
                 }
                 
-                applyCellColor(col5, data.result);
                 saveCell(col5, data.result, 5, true);
             }
+            
+            // --- THE FIX: ALWAYS re-evaluate the color, even if the text string stayed the same! ---
+            applyCellColor(col5, data.result);
+            
         } else if (!isBackground) {
             col5.innerText = "NA";
+            applyCellColor(col5, "NA");
         }
     } catch (e) {
         console.error("VLOOKUP Pull Error:", e);

@@ -2071,16 +2071,13 @@ function displayAssetDetails(assetObj, assetName) {
     const card = document.getElementById('attr-details-card');
     card.style.display = 'block';
     
-    // --- UPDATED: Add both the QR and Photo Scanner buttons to the top ---
+    // --- UPDATED: Removed the global Photo Scanner button from the top ---
     document.getElementById('attr-title').innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <span style="font-size: 24px;">${assetName}</span>
                 <button onclick="startQRScanner('${assetName.replace(/'/g, "\\'")}')" style="background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#2e7d32'; this.style.color='white';" onmouseout="this.style.background='#e8f5e9'; this.style.color='#2e7d32';">
                     <span style="font-size: 14px;">🔳</span> Scan QR
-                </button>
-                <button onclick="startMultiScanner('${assetName.replace(/'/g, "\\'")}')" style="background: #e3f2fd; color: #1565c0; border: 1px solid #1565c0; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#1565c0'; this.style.color='white';" onmouseout="this.style.background='#e3f2fd'; this.style.color='#1565c0';">
-                    <span style="font-size: 14px;">📷</span> Scan Photo
                 </button>
             </div>
             <button id="attr-save-btn" onclick="saveAttributeChanges('${assetName.replace(/'/g, "\\'")}')" style="background: #2e7d32; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s; display: none;">Save Changes</button>
@@ -2100,7 +2097,6 @@ function displayAssetDetails(assetObj, assetName) {
         let groupName = "General";
         let displayName = key;
         
-        // --- UPDATED: Breaking down by "Type" (before colon) and "Name" (after colon) ---
         const colonIndex = key.indexOf(':');
         if (colonIndex !== -1) {
             groupName = key.substring(0, colonIndex).trim();
@@ -2121,11 +2117,27 @@ function displayAssetDetails(assetObj, assetName) {
         const section = document.createElement('div');
         section.style.marginBottom = '30px';
         
-        // Render the "Type" as the prominent header
+        // --- UPDATED: Render the "Type" header alongside a dedicated Photo Scanner button ---
+        const headerContainer = document.createElement('div');
+        headerContainer.style.cssText = "display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; margin-bottom: 15px; padding-bottom: 8px;";
+        
         const header = document.createElement('h3');
         header.innerText = gName;
-        header.style.cssText = "margin-top: 0; margin-bottom: 15px; color: #444; border-bottom: 2px solid #eee; padding-bottom: 8px; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;";
-        section.appendChild(header);
+        header.style.cssText = "margin: 0; color: #444; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;";
+        headerContainer.appendChild(header);
+
+        const groupScanBtn = document.createElement('button');
+        groupScanBtn.innerHTML = `<span style="font-size: 14px;">📷</span> Scan Photo`;
+        groupScanBtn.style.cssText = "background: #e3f2fd; color: #1565c0; border: 1px solid #1565c0; cursor: pointer; font-size: 11px; padding: 4px 10px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 4px;";
+        groupScanBtn.onmouseover = () => { groupScanBtn.style.background='#1565c0'; groupScanBtn.style.color='white'; };
+        groupScanBtn.onmouseout = () => { groupScanBtn.style.background='#e3f2fd'; groupScanBtn.style.color='#1565c0'; };
+        
+        const safeAsset = assetName.replace(/'/g, "\\'");
+        const safeGroup = gName.replace(/'/g, "\\'");
+        groupScanBtn.onclick = () => startMultiScanner(safeAsset, safeGroup);
+        
+        headerContainer.appendChild(groupScanBtn);
+        section.appendChild(headerContainer);
         
         const groupGrid = document.createElement('div');
         groupGrid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;";
@@ -2135,6 +2147,7 @@ function displayAssetDetails(assetObj, assetName) {
             const rawValue = String(attr.value || "").trim();
             const isTBD = rawValue.toUpperCase() === 'TBD';
             const safeKey = attr.originalKey.replace(/'/g, "\\'");
+            const safeGName = gName.replace(/"/g, '&quot;');
             
             item.style.cssText = isTBD 
                 ? "background: #ffebee; padding: 10px 15px; border-radius: 6px; border: 1px solid #d32f2f; display: flex; flex-direction: column;"
@@ -2144,11 +2157,12 @@ function displayAssetDetails(assetObj, assetName) {
                 ? "font-size: 14px; color: #d32f2f; font-weight: 800; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #d32f2f;" 
                 : "font-size: 14px; color: #111; font-weight: 500; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #ccc;";
             
+            // --- NEW: Added data-group property to inputs ---
             item.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                     <span style="font-size: 11px; color: #777; text-transform: uppercase; font-weight: bold;" title="${attr.originalKey}">${attr.display}</span>
                 </div>
-                <input type="text" class="attr-input-field" data-key="${attr.originalKey}" data-original="${rawValue}" value="${rawValue}" style="${valueStyle}">
+                <input type="text" class="attr-input-field" data-key="${attr.originalKey}" data-group="${safeGName}" data-original="${rawValue}" value="${rawValue}" style="${valueStyle}">
             `;
             
             const inputField = item.querySelector('input');
@@ -2497,6 +2511,7 @@ function startMultiScanner(assetName) {
     document.getElementById('scanner-mode-toggles').style.display = 'none';
 }
 
+// Update stopScanner slightly below it:
 function stopScanner() {
     document.getElementById('scanner-modal').style.display = 'none';
     
@@ -2505,7 +2520,8 @@ function stopScanner() {
         modalBox.style.width = '450px';
         modalBox.style.height = 'auto';
     }
-    window.multiScanState = { assetName: null, activeAttribute: null, boxes: [], imageObj: null };
+    // Clear out the group name upon closing
+    window.multiScanState = { assetName: null, groupName: null, activeAttribute: null, boxes: [], imageObj: null };
 }
 
 function handleMultiOCRImage(event) {

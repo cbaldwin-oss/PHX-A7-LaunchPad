@@ -2071,13 +2071,16 @@ function displayAssetDetails(assetObj, assetName) {
     const card = document.getElementById('attr-details-card');
     card.style.display = 'block';
     
-    // --- UPDATED: Add the global Scan Nameplate button to the top ---
+    // --- UPDATED: Add both the QR and Photo Scanner buttons to the top ---
     document.getElementById('attr-title').innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <span>${assetName}</span>
-                <button onclick="startMultiScanner('${assetName.replace(/'/g, "\\'")}')" style="background: #e3f2fd; color: #1565c0; border: 1px solid #1565c0; cursor: pointer; font-size: 13px; padding: 6px 12px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#1565c0'; this.style.color='white';" onmouseout="this.style.background='#e3f2fd'; this.style.color='#1565c0';">
-                    <span style="font-size: 14px;">📷</span> Scan Nameplate
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 24px;">${assetName}</span>
+                <button onclick="startQRScanner('${assetName.replace(/'/g, "\\'")}')" style="background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#2e7d32'; this.style.color='white';" onmouseout="this.style.background='#e8f5e9'; this.style.color='#2e7d32';">
+                    <span style="font-size: 14px;">🔳</span> Scan QR
+                </button>
+                <button onclick="startMultiScanner('${assetName.replace(/'/g, "\\'")}')" style="background: #e3f2fd; color: #1565c0; border: 1px solid #1565c0; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#1565c0'; this.style.color='white';" onmouseout="this.style.background='#e3f2fd'; this.style.color='#1565c0';">
+                    <span style="font-size: 14px;">📷</span> Scan Photo
                 </button>
             </div>
             <button id="attr-save-btn" onclick="saveAttributeChanges('${assetName.replace(/'/g, "\\'")}')" style="background: #2e7d32; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s; display: none;">Save Changes</button>
@@ -2097,6 +2100,7 @@ function displayAssetDetails(assetObj, assetName) {
         let groupName = "General";
         let displayName = key;
         
+        // --- UPDATED: Breaking down by "Type" (before colon) and "Name" (after colon) ---
         const colonIndex = key.indexOf(':');
         if (colonIndex !== -1) {
             groupName = key.substring(0, colonIndex).trim();
@@ -2117,19 +2121,17 @@ function displayAssetDetails(assetObj, assetName) {
         const section = document.createElement('div');
         section.style.marginBottom = '30px';
         
-        if (gName !== "General" || groupNames.length > 1) {
-            const header = document.createElement('h3');
-            header.innerText = gName;
-            header.style.cssText = "margin-top: 0; margin-bottom: 15px; color: #444; border-bottom: 2px solid #eee; padding-bottom: 8px; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;";
-            section.appendChild(header);
-        }
+        // Render the "Type" as the prominent header
+        const header = document.createElement('h3');
+        header.innerText = gName;
+        header.style.cssText = "margin-top: 0; margin-bottom: 15px; color: #444; border-bottom: 2px solid #eee; padding-bottom: 8px; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;";
+        section.appendChild(header);
         
         const groupGrid = document.createElement('div');
         groupGrid.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;";
         
         groups[gName].forEach(attr => {
             const item = document.createElement('div');
-            
             const rawValue = String(attr.value || "").trim();
             const isTBD = rawValue.toUpperCase() === 'TBD';
             const safeKey = attr.originalKey.replace(/'/g, "\\'");
@@ -2142,7 +2144,6 @@ function displayAssetDetails(assetObj, assetName) {
                 ? "font-size: 14px; color: #d32f2f; font-weight: 800; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #d32f2f;" 
                 : "font-size: 14px; color: #111; font-weight: 500; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #ccc;";
             
-            // --- UPDATED: Removed individual scan buttons ---
             item.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                     <span style="font-size: 11px; color: #777; text-transform: uppercase; font-weight: bold;" title="${attr.originalKey}">${attr.display}</span>
@@ -2151,17 +2152,9 @@ function displayAssetDetails(assetObj, assetName) {
             `;
             
             const inputField = item.querySelector('input');
-            inputField.addEventListener('input', () => {
-                document.getElementById('attr-save-btn').style.display = 'block';
-            });
-            inputField.addEventListener('focus', () => {
-                inputField.style.borderBottomStyle = 'solid';
-                inputField.style.borderBottomColor = '#2e7d32';
-            });
-            inputField.addEventListener('blur', () => {
-                inputField.style.borderBottomStyle = 'dashed';
-                inputField.style.borderBottomColor = isTBD ? '#d32f2f' : '#ccc';
-            });
+            inputField.addEventListener('input', () => document.getElementById('attr-save-btn').style.display = 'block');
+            inputField.addEventListener('focus', () => { inputField.style.borderBottomStyle = 'solid'; inputField.style.borderBottomColor = '#2e7d32'; });
+            inputField.addEventListener('blur', () => { inputField.style.borderBottomStyle = 'dashed'; inputField.style.borderBottomColor = isTBD ? '#d32f2f' : '#ccc'; });
             
             groupGrid.appendChild(item);
         });
@@ -2180,6 +2173,225 @@ window.multiScanState = {
     boxes: [], 
     imageObj: null
 };
+
+// ==========================================
+// QR CODE DATA EXTRACTION & MAPPING LOGIC
+// ==========================================
+function startQRScanner(assetName) {
+    window.multiScanState.assetName = assetName;
+    document.getElementById('scanner-modal-title').innerText = `Scan QR: ${assetName}`;
+    document.getElementById('scanner-modal').style.display = 'flex';
+    
+    const modalBox = document.querySelector('#scanner-modal > div');
+    if (modalBox) {
+        modalBox.style.width = '450px';
+        modalBox.style.height = 'auto';
+    }
+
+    const viewport = document.getElementById('scanner-viewport');
+    viewport.innerHTML = `
+        <div id="qr-reader" style="width: 100%; border-radius: 8px; overflow: hidden; background: #000; min-height: 250px;"></div>
+        <p style="text-align: center; font-size: 13px; color: #666; margin-top: 10px;">Align QR code inside the box.</p>
+        <button onclick="stopScanner()" style="width:100%; padding:10px; background:#f5f5f5; border:1px solid #ddd; border-radius:4px; font-weight:bold; cursor:pointer; margin-top:10px;">Cancel</button>
+    `;
+
+    window.html5Qrcode = new Html5Qrcode("qr-reader");
+
+    window.html5Qrcode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+            // Success! Stop scanner and show mapping UI
+            if (window.html5Qrcode) {
+                window.html5Qrcode.stop().then(() => {
+                    window.html5Qrcode.clear();
+                    window.html5Qrcode = null;
+                    showQRMappingUI(decodedText);
+                }).catch(e => console.log(e));
+            }
+        },
+        (err) => { /* ignore frame errors */ }
+    ).catch((err) => {
+        console.error("Camera access error:", err);
+        viewport.innerHTML = `<p style="color: #d32f2f; padding: 20px; text-align: center;">Camera access denied or unavailable.</p>`;
+    });
+}
+
+function showQRMappingUI(decodedText) {
+    // Attempt to extract standard fields using regex
+    let model = (decodedText.match(/(?:model|mn|ref|p\/n|part(?:\s*no\.?))[\s:=]+([^,\n|;]+)/i) || [])[1] || "";
+    let serial = (decodedText.match(/(?:serial|sn|s\/n)[\s:=]+([^,\n|;]+)/i) || [])[1] || "";
+    let mfg = (decodedText.match(/(?:manufacturer|mfg|make)[\s:=]+([^,\n|;]+)/i) || [])[1] || "";
+
+    // Build the dropdown options from the available input fields on the screen
+    const attrInputs = document.querySelectorAll('.attr-input-field');
+    let optionsHtml = '<option value="">-- Do Not Assign --</option>';
+    attrInputs.forEach(input => {
+        const key = input.getAttribute('data-key');
+        let display = key.includes(':') ? key.split(':')[1].trim() : key;
+        optionsHtml += `<option value="${key.replace(/"/g, '&quot;')}">${key.includes(':') ? key.split(':')[0].trim() + ' - ' : ''}${display}</option>`;
+    });
+
+    const viewport = document.getElementById('scanner-viewport');
+    viewport.innerHTML = `
+        <div style="padding: 15px; width: 100%; box-sizing: border-box; background:#fff;">
+            <h3 style="margin-top:0; color:#2e7d32; font-size:16px;">Map QR Data</h3>
+            <div style="font-size:11px; color:#666; word-break:break-all; background:#f1f3f4; padding:8px; border-radius:4px; margin-bottom:15px; border:1px solid #ddd; max-height: 60px; overflow-y:auto;">
+                <strong>Raw Scanned Text:</strong><br> ${decodedText}
+            </div>
+            
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                ${createMappingRow('Manufacturer', mfg, optionsHtml)}
+                ${createMappingRow('Model', model, optionsHtml)}
+                ${createMappingRow('Serial', serial, optionsHtml)}
+                ${createMappingRow('Raw Text', decodedText, optionsHtml)}
+            </div>
+            
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button onclick="stopScanner()" style="flex:1; padding:12px; background:#f5f5f5; color:#333; border:1px solid #ddd; border-radius:4px; font-weight:bold; cursor:pointer;">Cancel</button>
+                <button onclick="applyQRMapping()" style="flex:2; padding:12px; background:#2e7d32; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Apply to Attributes</button>
+            </div>
+        </div>
+    `;
+
+    // Attempt to auto-map the dropdowns based on keywords
+    setTimeout(() => {
+        const autoMap = (id, keywords) => {
+            const select = document.querySelector(`select[data-val-id="${id}"]`);
+            const valInput = document.getElementById(id);
+            // Only auto-map if we actually extracted a value, or if it's the raw text
+            if (!select || (!valInput.value.trim() && id !== 'qr-map-rawtext-val')) return;
+            
+            for (let i = 0; i < select.options.length; i++) {
+                const optText = select.options[i].text.toLowerCase();
+                if (keywords.some(kw => optText.includes(kw))) {
+                    select.selectedIndex = i;
+                    break;
+                }
+            }
+        };
+        
+        autoMap('qr-map-manufacturer-val', ['manufacturer', 'make', 'mfg']);
+        autoMap('qr-map-model-val', ['model', 'mn']);
+        autoMap('qr-map-serial-val', ['serial', 's/n', 'sn']);
+    }, 50);
+}
+
+function createMappingRow(label, value, optionsHtml) {
+    let selectId = 'qr-map-' + label.toLowerCase().replace(/\s/g, '');
+    return `
+        <div style="display:flex; align-items:center; gap:10px; background:#f9f9f9; padding:10px; border:1px solid #eee; border-radius:6px;">
+            <div style="flex:1; min-width:0;">
+                <div style="font-size:11px; font-weight:bold; color:#555; text-transform:uppercase;">${label}</div>
+                <input type="text" id="${selectId}-val" value="${value.replace(/"/g, '&quot;')}" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:3px; font-size:12px; margin-top:4px; box-sizing:border-box;">
+            </div>
+            <div style="flex:1; min-width:0;">
+                <div style="font-size:11px; font-weight:bold; color:#555; text-transform:uppercase;">Assign To</div>
+                <select style="width:100%; padding:6px; border:1px solid #ccc; border-radius:3px; font-size:12px; margin-top:4px; background:white;">
+                    <option value="">-- Ignore --</option>
+                    ${optionsHtml}
+                </select>
+            </div>
+        </div>
+    `.replace('optionsHtml', optionsHtml); // Safely inject the options
+}
+
+// Cleaned up the creator for template literals
+function createMappingRow(label, idPrefix, value, optionsHtml) {
+    return `
+        <div style="display:flex; align-items:center; gap:10px; background:#f9f9f9; padding:10px; border-radius:6px; border:1px solid #eee;">
+            <div style="flex:1; min-width:0;">
+                <div style="font-size:11px; color:#777; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">${label}</div>
+                <input type="text" id="${idPrefix}-val" value="${value.replace(/"/g, '&quot;')}" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; font-size:12px; box-sizing:border-box;">
+            </div>
+            <div style="flex:1; min-width:0;">
+                <div style="font-size:11px; color:#2e7d32; font-weight:bold; text-transform:uppercase; margin-bottom:4px;">Assign To</div>
+                <select class="qr-mapping-select" data-val-id="${idPrefix}-val" style="width:100%; padding:6px; border:1px solid #2e7d32; background:#f1f8e9; border-radius:4px; font-size:12px; box-sizing:border-box; cursor:pointer;">
+                    ${optionsHtml}
+                </select>
+            </div>
+        </div>
+    `;
+}
+
+// Refactored to use the cleaner mapping row
+function showQRMappingUI(decodedText) {
+    let model = (decodedText.match(/(?:model|mn|ref|p\/n|part(?:\s*no\.?))[\s:=]+([^,\n|;]+)/i) || [])[1] || "";
+    let serial = (decodedText.match(/(?:serial|sn|s\/n)[\s:=]+([^,\n|;]+)/i) || [])[1] || "";
+    let mfg = (decodedText.match(/(?:manufacturer|mfg|make)[\s:=]+([^,\n|;]+)/i) || [])[1] || "";
+
+    const attrInputs = document.querySelectorAll('.attr-input-field');
+    let optionsHtml = '<option value="">-- Do Not Assign --</option>';
+    attrInputs.forEach(input => {
+        const key = input.getAttribute('data-key');
+        let display = key.includes(':') ? key.split(':')[1].trim() : key;
+        optionsHtml += `<option value="${key.replace(/"/g, '&quot;')}">${key.includes(':') ? key.split(':')[0].trim() + ' - ' : ''}${display}</option>`;
+    });
+
+    const viewport = document.getElementById('scanner-viewport');
+    viewport.innerHTML = `
+        <div style="padding: 15px; width: 100%; box-sizing: border-box; background:#fff;">
+            <h3 style="margin-top:0; color:#2e7d32; font-size:16px;">Map QR Data</h3>
+            <div style="font-size:11px; color:#666; word-break:break-all; background:#f1f3f4; padding:8px; border-radius:4px; margin-bottom:15px; border:1px solid #ddd; max-height: 60px; overflow-y:auto;">
+                <strong>Raw Scanned Text:</strong><br> ${decodedText}
+            </div>
+            
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                ${createMappingRow('Manufacturer', 'qr-map-manufacturer', mfg, optionsHtml)}
+                ${createMappingRow('Model', 'qr-map-model', model, optionsHtml)}
+                ${createMappingRow('Serial', 'qr-map-serial', serial, optionsHtml)}
+                ${createMappingRow('Raw Text', 'qr-map-rawtext', decodedText, optionsHtml)}
+            </div>
+            
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button onclick="stopScanner()" style="flex:1; padding:12px; background:#f5f5f5; color:#333; border:1px solid #ddd; border-radius:4px; font-weight:bold; cursor:pointer;">Cancel</button>
+                <button onclick="applyQRMapping()" style="flex:2; padding:12px; background:#2e7d32; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Apply to Attributes</button>
+            </div>
+        </div>
+    `;
+
+    setTimeout(() => {
+        const autoMap = (id, keywords) => {
+            const select = document.querySelector(`select[data-val-id="${id}"]`);
+            const valInput = document.getElementById(id);
+            if (!select || (!valInput.value.trim() && id !== 'qr-map-rawtext-val')) return;
+            
+            for (let i = 0; i < select.options.length; i++) {
+                const optText = select.options[i].text.toLowerCase();
+                if (keywords.some(kw => optText.includes(kw))) {
+                    select.selectedIndex = i;
+                    break;
+                }
+            }
+        };
+        
+        autoMap('qr-map-manufacturer-val', ['manufacturer', 'make', 'mfg']);
+        autoMap('qr-map-model-val', ['model', 'mn']);
+        autoMap('qr-map-serial-val', ['serial', 's/n', 'sn']);
+    }, 50);
+}
+
+function applyQRMapping() {
+    const selects = document.querySelectorAll('.qr-mapping-select');
+    let applied = 0;
+    selects.forEach(select => {
+        const targetKey = select.value;
+        if (targetKey) {
+            const valInput = document.getElementById(select.getAttribute('data-val-id'));
+            const val = valInput ? valInput.value.trim() : '';
+            if (val) {
+                const targetInput = document.querySelector(`input[data-key="${targetKey}"]`);
+                if (targetInput) {
+                    injectDataIntoInput(targetInput, val);
+                    applied++;
+                }
+            }
+        }
+    });
+    
+    alert(`Successfully mapped ${applied} values.`);
+    stopScanner();
+}
 
 function startMultiScanner(assetName) {
     window.multiScanState = {

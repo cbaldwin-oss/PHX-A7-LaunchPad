@@ -5598,6 +5598,11 @@ function openBatchAddModal() {
     // Clear loose fields
     document.getElementById('batch-date').value = '';
     document.getElementById('batch-notes').value = '';
+    
+    // --- NEW: Clear Search Bars ---
+    document.getElementById('batch-trade-search').value = '';
+    document.getElementById('batch-act-search').value = '';
+    document.getElementById('batch-asset-search').value = '';
 }
 
 function closeBatchAddModal() {
@@ -5742,6 +5747,24 @@ function closeIframeModal() {
     document.getElementById('iframe-modal-content').src = "";
 }
 
+function filterBatchList(listId, query) {
+    const term = query.toLowerCase().trim();
+    const list = document.getElementById(listId);
+    if (!list) return;
+    
+    // Grab all the <label> elements holding the checkboxes
+    const labels = list.querySelectorAll('label');
+    
+    labels.forEach(label => {
+        // If the text includes the search term, show it. Otherwise, hide it.
+        if (label.innerText.toLowerCase().includes(term)) {
+            label.style.display = 'flex';
+        } else {
+            label.style.display = 'none';
+        }
+    });
+}
+
     </script>
     <div id="bulk-date-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; justify-content:center; align-items:center;">
     <div style="background:white; padding:30px; border-radius:8px; width:350px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
@@ -5785,18 +5808,27 @@ function closeIframeModal() {
                 </div>
             </div>
 
-            <div style="display:flex; flex-direction:column; max-height: 120px;">
-                <label style="font-weight:bold; font-size:13px; color:#555;">Trade Partners (Col 6) <span style="font-weight:normal; font-size:11px;">(Select Multiple)</span></label>
+            <div style="display:flex; flex-direction:column; max-height: 140px;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:5px;">
+                    <label style="font-weight:bold; font-size:13px; color:#555;">Trade Partners (Col 6) <span style="font-weight:normal; font-size:11px;">(Select Multiple)</span></label>
+                    <input type="text" id="batch-trade-search" placeholder="Search Trades..." oninput="filterBatchList('batch-trade-list', this.value)" style="padding:4px 6px; border:1px solid #ccc; border-radius:3px; font-size:11px; width:140px; outline:none;">
+                </div>
                 <div id="batch-trade-list" style="flex:1; border:1px solid #ccc; border-radius:4px; overflow-y:auto; padding:5px; background:#f9f9f9;"></div>
             </div>
             
-            <div style="display:flex; gap:15px; height: 220px;">
+            <div style="display:flex; gap:15px; height: 240px;">
                 <div style="flex:1; display:flex; flex-direction:column;">
-                    <label style="font-weight:bold; font-size:13px; color:#555;">Activities (Col 3) * <span style="font-weight:normal; font-size:11px;">(Select Multiple)</span></label>
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:5px;">
+                        <label style="font-weight:bold; font-size:13px; color:#555;">Activities (Col 3) *</label>
+                        <input type="text" id="batch-act-search" placeholder="Search Activities..." oninput="filterBatchList('batch-activities-list', this.value)" style="padding:4px 6px; border:1px solid #ccc; border-radius:3px; font-size:11px; width:120px; outline:none;">
+                    </div>
                     <div id="batch-activities-list" style="flex:1; border:1px solid #ccc; border-radius:4px; overflow-y:auto; padding:5px; background:#f9f9f9;"></div>
                 </div>
                 <div style="flex:1; display:flex; flex-direction:column;">
-                    <label style="font-weight:bold; font-size:13px; color:#555;">Assets (Col 4) * <span style="font-weight:normal; font-size:11px;">(Select Multiple)</span></label>
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:5px;">
+                        <label style="font-weight:bold; font-size:13px; color:#555;">Assets (Col 4) *</label>
+                        <input type="text" id="batch-asset-search" placeholder="Search Assets..." oninput="filterBatchList('batch-assets-list', this.value)" style="padding:4px 6px; border:1px solid #ccc; border-radius:3px; font-size:11px; width:120px; outline:none;">
+                    </div>
                     <div id="batch-assets-list" style="flex:1; border:1px solid #ccc; border-radius:4px; overflow-y:auto; padding:5px; background:#f9f9f9;"></div>
                 </div>
             </div>

@@ -5573,11 +5573,14 @@ function openBatchAddModal() {
     timeSelect.innerHTML = '<option value="">Select...</option>';
     (window.dropdownData?.col1 || []).forEach(t => timeSelect.add(new Option(t, t)));
 
-    const placeSelect = document.getElementById('batch-place');
-    placeSelect.innerHTML = '<option value="">Select...</option>';
-    (window.dropdownData?.col2 || []).forEach(p => placeSelect.add(new Option(p, p)));
-
     // Populate Checkbox Lists
+    const tradeList = document.getElementById('batch-trade-list');
+    tradeList.innerHTML = (window.dropdownData?.col6 || []).map(t => `
+        <label style="display:flex; align-items:center; padding:6px; border-bottom:1px solid #eee; cursor:pointer; font-size:13px; transition: background 0.2s;" onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background='transparent'">
+            <input type="checkbox" value="${t.replace(/"/g, '&quot;')}" class="batch-trade-cb" style="margin-right:8px; transform: scale(1.1); cursor:pointer;"> ${t}
+        </label>
+    `).join('');
+
     const actList = document.getElementById('batch-activities-list');
     actList.innerHTML = (window.dropdownData?.col3 || []).map(a => `
         <label style="display:flex; align-items:center; padding:6px; border-bottom:1px solid #eee; cursor:pointer; font-size:13px; transition: background 0.2s;" onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background='transparent'">
@@ -5594,7 +5597,6 @@ function openBatchAddModal() {
     
     // Clear loose fields
     document.getElementById('batch-date').value = '';
-    document.getElementById('batch-trade').value = '';
     document.getElementById('batch-notes').value = '';
 }
 
@@ -5605,12 +5607,12 @@ function closeBatchAddModal() {
 async function processBatchAdd() {
     const targetDate = document.getElementById('batch-date').value;
     const timeVal = document.getElementById('batch-time').value;
-    const placeVal = document.getElementById('batch-place').value;
-    const tradeVal = document.getElementById('batch-trade').value;
     const notesVal = document.getElementById('batch-notes').value;
 
     if (!targetDate) return alert("Please select a target date.");
 
+    // Retrieve multiple selections
+    const selectedTrades = Array.from(document.querySelectorAll('.batch-trade-cb:checked')).map(cb => cb.value).join(' | ');
     const selectedActs = Array.from(document.querySelectorAll('.batch-act-cb:checked')).map(cb => cb.value);
     const selectedAssets = Array.from(document.querySelectorAll('.batch-asset-cb:checked')).map(cb => cb.value);
 
@@ -5662,6 +5664,9 @@ async function processBatchAdd() {
             emptyRow.style.display = 'flex'; 
 
             const rowNum = parseInt(emptyRow.id.replace('row-wrapper-', ''));
+            
+            // --- NEW: Automatically look up the corresponding place for this asset ---
+            const placeVal = (window.assetToPlaceMap && window.assetToPlaceMap[asset]) ? window.assetToPlaceMap[asset] : "";
 
             const setAndSave = (colIndex, val) => {
                 const el = emptyRow.querySelector(`[data-col-index="${colIndex}"]`);
@@ -5683,10 +5688,10 @@ async function processBatchAdd() {
 
             // Inject the data
             setAndSave(1, timeVal);
-            setAndSave(2, placeVal);
+            setAndSave(2, placeVal); // Automatically assigned!
             setAndSave(3, act);
             setAndSave(4, asset);
-            setAndSave(6, tradeVal);
+            setAndSave(6, selectedTrades);
             setAndSave(8, notesVal);
 
             // Trigger the Google Sheets Status Lookup
@@ -5698,7 +5703,6 @@ async function processBatchAdd() {
     document.getElementById('saveIndicator').innerText = "Saved";
     alert(`Successfully generated and added ${totalRowsNeeded} line item(s) to ${targetDate}.`);
 }
-
 /**
  * Helper function to convert 12hr/24hr time strings into numerical minutes for accurate sorting.
  * E.g., "8:00 AM" -> 480, "1:00 PM" -> 780
@@ -5781,18 +5785,12 @@ function closeIframeModal() {
                 </div>
             </div>
 
-            <div style="display:flex; gap:15px;">
-                <div style="flex:1;">
-                    <label style="font-weight:bold; font-size:13px; color:#555;">Place (Col 2)</label>
-                    <select id="batch-place" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;"></select>
-                </div>
-                <div style="flex:1;">
-                    <label style="font-weight:bold; font-size:13px; color:#555;">Trade Partners (Col 6)</label>
-                    <input type="text" id="batch-trade" placeholder="e.g. Partner A | Partner B" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">
-                </div>
+            <div style="display:flex; flex-direction:column; max-height: 120px;">
+                <label style="font-weight:bold; font-size:13px; color:#555;">Trade Partners (Col 6) <span style="font-weight:normal; font-size:11px;">(Select Multiple)</span></label>
+                <div id="batch-trade-list" style="flex:1; border:1px solid #ccc; border-radius:4px; overflow-y:auto; padding:5px; background:#f9f9f9;"></div>
             </div>
             
-            <div style="display:flex; gap:15px; height: 250px;">
+            <div style="display:flex; gap:15px; height: 220px;">
                 <div style="flex:1; display:flex; flex-direction:column;">
                     <label style="font-weight:bold; font-size:13px; color:#555;">Activities (Col 3) * <span style="font-weight:normal; font-size:11px;">(Select Multiple)</span></label>
                     <div id="batch-activities-list" style="flex:1; border:1px solid #ccc; border-radius:4px; overflow-y:auto; padding:5px; background:#f9f9f9;"></div>

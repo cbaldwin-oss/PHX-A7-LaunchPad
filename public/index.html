@@ -5122,6 +5122,9 @@ async function switchToRequestView() {
         window.dropdownData.col6.forEach(company => {
             companySelect.add(new Option(company, company));
         });
+        
+        // --- NEW: Add the fallback option at the very bottom ---
+        companySelect.add(new Option("Company not found", "Company not found"));
     }
 }
 

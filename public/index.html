@@ -2071,14 +2071,11 @@ function displayAssetDetails(assetObj, assetName) {
     const card = document.getElementById('attr-details-card');
     card.style.display = 'block';
     
-    // --- UPDATED: Removed the global Photo Scanner button from the top ---
+    // --- UPDATED: Removed QR and Photo buttons from the global title ---
     document.getElementById('attr-title').innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <span style="font-size: 24px;">${assetName}</span>
-                <button onclick="startQRScanner('${assetName.replace(/'/g, "\\'")}')" style="background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#2e7d32'; this.style.color='white';" onmouseout="this.style.background='#e8f5e9'; this.style.color='#2e7d32';">
-                    <span style="font-size: 14px;">🔳</span> Scan QR
-                </button>
             </div>
             <button id="attr-save-btn" onclick="saveAttributeChanges('${assetName.replace(/'/g, "\\'")}')" style="background: #2e7d32; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s; display: none;">Save Changes</button>
         </div>
@@ -2117,7 +2114,6 @@ function displayAssetDetails(assetObj, assetName) {
         const section = document.createElement('div');
         section.style.marginBottom = '30px';
         
-        // --- UPDATED: Render the "Type" header alongside a dedicated Photo Scanner button ---
         const headerContainer = document.createElement('div');
         headerContainer.style.cssText = "display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; margin-bottom: 15px; padding-bottom: 8px;";
         
@@ -2126,17 +2122,32 @@ function displayAssetDetails(assetObj, assetName) {
         header.style.cssText = "margin: 0; color: #444; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px;";
         headerContainer.appendChild(header);
 
+        // --- NEW: Container for the group-level scanner buttons ---
+        const btnContainer = document.createElement('div');
+        btnContainer.style.cssText = "display: flex; gap: 10px;";
+        
+        const safeAsset = assetName.replace(/'/g, "\\'");
+        const safeGroup = gName.replace(/'/g, "\\'");
+
+        // 1. QR Button
+        const groupQRBtn = document.createElement('button');
+        groupQRBtn.innerHTML = `<span style="font-size: 14px;">🔳</span> Scan QR`;
+        groupQRBtn.style.cssText = "background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; cursor: pointer; font-size: 11px; padding: 4px 10px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 4px;";
+        groupQRBtn.onmouseover = () => { groupQRBtn.style.background='#2e7d32'; groupQRBtn.style.color='white'; };
+        groupQRBtn.onmouseout = () => { groupQRBtn.style.background='#e8f5e9'; groupQRBtn.style.color='#2e7d32'; };
+        groupQRBtn.onclick = () => startQRScanner(safeAsset, safeGroup);
+
+        // 2. Photo Button
         const groupScanBtn = document.createElement('button');
         groupScanBtn.innerHTML = `<span style="font-size: 14px;">📷</span> Scan Photo`;
         groupScanBtn.style.cssText = "background: #e3f2fd; color: #1565c0; border: 1px solid #1565c0; cursor: pointer; font-size: 11px; padding: 4px 10px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 4px;";
         groupScanBtn.onmouseover = () => { groupScanBtn.style.background='#1565c0'; groupScanBtn.style.color='white'; };
         groupScanBtn.onmouseout = () => { groupScanBtn.style.background='#e3f2fd'; groupScanBtn.style.color='#1565c0'; };
-        
-        const safeAsset = assetName.replace(/'/g, "\\'");
-        const safeGroup = gName.replace(/'/g, "\\'");
         groupScanBtn.onclick = () => startMultiScanner(safeAsset, safeGroup);
         
-        headerContainer.appendChild(groupScanBtn);
+        btnContainer.appendChild(groupQRBtn);
+        btnContainer.appendChild(groupScanBtn);
+        headerContainer.appendChild(btnContainer);
         section.appendChild(headerContainer);
         
         const groupGrid = document.createElement('div');
@@ -2157,7 +2168,6 @@ function displayAssetDetails(assetObj, assetName) {
                 ? "font-size: 14px; color: #d32f2f; font-weight: 800; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #d32f2f;" 
                 : "font-size: 14px; color: #111; font-weight: 500; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #ccc;";
             
-            // --- NEW: Added data-group property to inputs ---
             item.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                     <span style="font-size: 11px; color: #777; text-transform: uppercase; font-weight: bold;" title="${attr.originalKey}">${attr.display}</span>
@@ -2188,12 +2198,12 @@ window.multiScanState = {
     imageObj: null
 };
 
-// ==========================================
-// QR CODE DATA EXTRACTION & MAPPING LOGIC
-// ==========================================
-function startQRScanner(assetName) {
+function startQRScanner(assetName, groupName) {
+    // Save the group name to state so the mapper can reference it
     window.multiScanState.assetName = assetName;
-    document.getElementById('scanner-modal-title').innerText = `Scan QR: ${assetName}`;
+    window.multiScanState.groupName = groupName;
+    
+    document.getElementById('scanner-modal-title').innerText = `Scan QR: ${assetName} (${groupName})`;
     document.getElementById('scanner-modal').style.display = 'flex';
     
     const modalBox = document.querySelector('#scanner-modal > div');
@@ -2215,7 +2225,6 @@ function startQRScanner(assetName) {
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
-            // Success! Stop scanner and show mapping UI
             if (window.html5Qrcode) {
                 window.html5Qrcode.stop().then(() => {
                     window.html5Qrcode.clear();
@@ -2232,18 +2241,25 @@ function startQRScanner(assetName) {
 }
 
 function showQRMappingUI(decodedText) {
-    // Attempt to extract standard fields using regex
-    let model = (decodedText.match(/(?:model|mn|ref|p\/n|part(?:\s*no\.?))[\s:=]+([^,\n|;]+)/i) || [])[1] || "";
-    let serial = (decodedText.match(/(?:serial|sn|s\/n)[\s:=]+([^,\n|;]+)/i) || [])[1] || "";
-    let mfg = (decodedText.match(/(?:manufacturer|mfg|make)[\s:=]+([^,\n|;]+)/i) || [])[1] || "";
+    let modelMatch = decodedText.match(/(?:model|mn|ref|p\/n|part(?:\s*no\.?))[\s:=]+(.*?)(?=\s*(?:serial|s\/n|sn|mfg|manufacturer|make|date|volts|amps|hz)|[,;\n|]|$)/i);
+    let serialMatch = decodedText.match(/(?:serial|sn|s\/n)[\s:=]+(.*?)(?=\s*(?:model|mn|ref|p\/n|part|mfg|manufacturer|make|date|volts|amps|hz)|[,;\n|]|$)/i);
+    let mfgMatch = decodedText.match(/(?:manufacturer|mfg|make)[\s:=]+(.*?)(?=\s*(?:model|mn|ref|p\/n|part|serial|s\/n|sn|date|volts|amps|hz)|[,;\n|]|$)/i);
 
-    // Build the dropdown options from the available input fields on the screen
-    const attrInputs = document.querySelectorAll('.attr-input-field');
+    let model = modelMatch ? modelMatch[1].replace(/[\/\\\-\s]+$/, '').trim() : "";
+    let serial = serialMatch ? serialMatch[1].replace(/[\/\\\-\s]+$/, '').trim() : "";
+    let mfg = mfgMatch ? mfgMatch[1].replace(/[\/\\\-\s]+$/, '').trim() : "";
+
+    // --- NEW: Target ONLY the inputs inside the active group ---
+    const safeGroup = window.multiScanState.groupName.replace(/"/g, '\\"');
+    const attrInputs = document.querySelectorAll(`.attr-input-field[data-group="${safeGroup}"]`);
+    
     let optionsHtml = '<option value="">-- Do Not Assign --</option>';
     attrInputs.forEach(input => {
         const key = input.getAttribute('data-key');
         let display = key.includes(':') ? key.split(':')[1].trim() : key;
-        optionsHtml += `<option value="${key.replace(/"/g, '&quot;')}">${key.includes(':') ? key.split(':')[0].trim() + ' - ' : ''}${display}</option>`;
+        
+        // Removed the prefix display since everything in the dropdown belongs to the same group now
+        optionsHtml += `<option value="${key.replace(/"/g, '&quot;')}">${display}</option>`;
     });
 
     const viewport = document.getElementById('scanner-viewport');

@@ -2071,9 +2071,15 @@ function displayAssetDetails(assetObj, assetName) {
     const card = document.getElementById('attr-details-card');
     card.style.display = 'block';
     
+    // --- UPDATED: Add the global Scan Nameplate button to the top ---
     document.getElementById('attr-title').innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span>${assetName}</span>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <span>${assetName}</span>
+                <button onclick="startMultiScanner('${assetName.replace(/'/g, "\\'")}')" style="background: #e3f2fd; color: #1565c0; border: 1px solid #1565c0; cursor: pointer; font-size: 13px; padding: 6px 12px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#1565c0'; this.style.color='white';" onmouseout="this.style.background='#e3f2fd'; this.style.color='#1565c0';">
+                    <span style="font-size: 14px;">📷</span> Scan Nameplate
+                </button>
+            </div>
             <button id="attr-save-btn" onclick="saveAttributeChanges('${assetName.replace(/'/g, "\\'")}')" style="background: #2e7d32; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.2s; display: none;">Save Changes</button>
         </div>
     `;
@@ -2136,13 +2142,10 @@ function displayAssetDetails(assetObj, assetName) {
                 ? "font-size: 14px; color: #d32f2f; font-weight: 800; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #d32f2f;" 
                 : "font-size: 14px; color: #111; font-weight: 500; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #ccc;";
             
-            // --- UPDATED: Added target scan button next to the label ---
+            // --- UPDATED: Removed individual scan buttons ---
             item.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                     <span style="font-size: 11px; color: #777; text-transform: uppercase; font-weight: bold;" title="${attr.originalKey}">${attr.display}</span>
-                    <button onclick="startScanner('${safeKey}')" style="background: #e3f2fd; color: #1565c0; border: 1px solid #1565c0; cursor: pointer; font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 4px;" title="Scan Data for ${attr.display}" onmouseover="this.style.background='#1565c0'; this.style.color='white';" onmouseout="this.style.background='#e3f2fd'; this.style.color='#1565c0';">
-                        <span style="font-size: 12px;">📷</span> Scan
-                    </button>
                 </div>
                 <input type="text" class="attr-input-field" data-key="${attr.originalKey}" data-original="${rawValue}" value="${rawValue}" style="${valueStyle}">
             `;
@@ -2169,155 +2172,26 @@ function displayAssetDetails(assetObj, assetName) {
 }
 
 // ==========================================
-// UNIFIED SCANNER LOGIC (QR + TARGETED OCR)
+// MULTI-BOX NAMEPLATE SCANNER LOGIC
 // ==========================================
-window.html5QrcodeScanner = null;
-window.html5Qrcode = null;
-window.currentScanTargetKey = null;
-window.ocrVideoStream = null;
+window.multiScanState = {
+    assetName: null,
+    activeAttribute: null,
+    boxes: [], 
+    imageObj: null
+};
 
-function startScanner(targetKey) {
-    window.currentScanTargetKey = targetKey;
-    document.getElementById('scanner-modal-title').innerText = `Scan: ${targetKey}`;
+function startMultiScanner(assetName) {
+    window.multiScanState = {
+        assetName: assetName,
+        activeAttribute: null,
+        boxes: [],
+        imageObj: null
+    };
+    
+    document.getElementById('scanner-modal-title').innerText = `Scan Nameplate: ${assetName}`;
     document.getElementById('scanner-modal').style.display = 'flex'; 
     
-    document.getElementById('scanner-viewport').innerHTML = `
-        <p style="color: #666; font-size: 14px; text-align: center; padding: 20px;">Select a scan mode above to begin.</p>
-    `;
-    document.getElementById('scanner-viewport').style.border = "1px dashed #ccc";
-}
-
-// --- MODE 1: AUTO-START QR CODE (WITH SMART CONTEXT) ---
-function initQRCodeScanner() {
-    if (window.ocrVideoStream) {
-        window.ocrVideoStream.getTracks().forEach(track => track.stop());
-        window.ocrVideoStream = null;
-    }
-    
-    const viewport = document.getElementById('scanner-viewport');
-    viewport.style.border = "none";
-    viewport.innerHTML = `
-        <div id="qr-reader" style="width: 100%; border-radius: 8px; overflow: hidden; background: #000; min-height: 250px;"></div>
-        <p style="text-align: center; font-size: 13px; color: #666; margin-top: 10px;">Align QR code inside the box.</p>
-    `;
-
-    window.html5Qrcode = new Html5Qrcode("qr-reader");
-
-    window.html5Qrcode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-            const refMatch = decodedText.match(/ref=([^\/]+)/i);
-            const snMatch = decodedText.match(/sn=([^\/]+)/i);
-            
-            if (refMatch || snMatch) {
-                // 1. Identify the common group prefix using the FIRST WORD
-                let groupContext = "";
-                const targetKey = window.currentScanTargetKey;
-                
-                if (targetKey.includes(':')) {
-                    // If it uses the strict "Group: Attribute" syntax
-                    groupContext = targetKey.split(':')[0].trim().toLowerCase();
-                } else {
-                    // Otherwise, pull exactly the first word of the clicked attribute
-                    // e.g., "Breaker Serial Number" -> "breaker", "Trip Unit Model" -> "trip"
-                    groupContext = targetKey.trim().split(/\s+/)[0].toLowerCase();
-                }
-
-                // 2. Search for sibling inputs that share that exact same first word context
-                const findInput = (typeWords) => {
-                    const inputs = document.querySelectorAll('.attr-input-field');
-                    for (let input of inputs) {
-                        const key = input.getAttribute('data-key').toLowerCase();
-                        
-                        // Check if the input's key contains the target word (Model/Serial) 
-                        // AND starts with the same context word (Breaker/Trip)
-                        if (key.startsWith(groupContext) && typeWords.some(w => key.includes(w))) {
-                            return input;
-                        }
-                    }
-                    return null;
-                };
-
-                const modelInput = findInput(['model', 'ref']);
-                const serialInput = findInput(['serial', 's/n', 'sn']);
-                
-                let smartFilled = false;
-                
-                // 3. Inject data into matching sibling boxes
-                if (refMatch && modelInput) {
-                    injectDataIntoInput(modelInput, refMatch[1]);
-                    smartFilled = true;
-                }
-                if (snMatch && serialInput) {
-                    injectDataIntoInput(serialInput, snMatch[1]);
-                    smartFilled = true;
-                }
-                
-                // If it successfully filled multiple context boxes, close the scanner and finish
-                if (smartFilled) {
-                    stopScanner();
-                    return; 
-                }
-            }
-            
-            // 4. Fallback: If it's just raw text or the smart match failed, dump it into the single clicked box
-            fillAttributeField(decodedText, refMatch, snMatch);
-        },
-        (errorMessage) => { /* ignore frame errors */ }
-    ).catch((err) => {
-        console.error("Camera access error:", err);
-        viewport.innerHTML = `<p style="color: #d32f2f; padding: 20px; text-align: center;">Camera access denied or unavailable.</p>`;
-    });
-}
-
-function stopScanner() {
-    document.getElementById('scanner-modal').style.display = 'none';
-    
-    // --- NEW: Reset the modal back to its normal small size ---
-    const modalBox = document.querySelector('#scanner-modal > div');
-    if (modalBox) {
-        modalBox.style.width = '450px';
-        modalBox.style.height = 'auto';
-    }
-    
-    if (window.html5QrcodeScanner) {
-        window.html5QrcodeScanner.clear().catch(e => console.log(e));
-    }
-    if (window.html5Qrcode) {
-        window.html5Qrcode.stop().then(() => {
-            window.html5Qrcode.clear();
-            window.html5Qrcode = null;
-        }).catch(e => console.log(e));
-    }
-    if (window.ocrVideoStream) {
-        window.ocrVideoStream.getTracks().forEach(track => track.stop());
-        window.ocrVideoStream = null;
-    }
-    
-    window.currentScanTargetKey = null;
-    window.ocrImageObj = null;
-    window.cropRect = null;
-}
-
-// --- MODE 2: HIGH-RES PHOTO & CROP OCR ---
-window.ocrImageObj = null;
-window.cropRect = null;
-
-async function initTextScanner() {
-    if (window.html5QrcodeScanner) window.html5QrcodeScanner.clear();
-    if (window.html5Qrcode) {
-        window.html5Qrcode.stop().then(() => {
-            window.html5Qrcode.clear();
-            window.html5Qrcode = null;
-        }).catch(e => console.log(e));
-    }
-    if (window.ocrVideoStream) {
-        window.ocrVideoStream.getTracks().forEach(track => track.stop());
-        window.ocrVideoStream = null;
-    }
-
-    // --- NEW: Reset the modal back to its normal small size for the menu ---
     const modalBox = document.querySelector('#scanner-modal > div');
     if (modalBox) {
         modalBox.style.width = '450px';
@@ -2334,14 +2208,26 @@ async function initTextScanner() {
             <p style="margin-top: 0; color: #e65100; font-weight: bold; font-size: 16px;">Take a clear photo of the nameplate</p>
             <label style="background: #f57c00; color: white; padding: 14px 24px; border-radius: 6px; cursor: pointer; display: inline-block; font-weight: bold; font-size: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 📸 Open Native Camera
-                <input type="file" accept="image/*" capture="environment" style="display: none;" onchange="handleOCRImage(event)">
+                <input type="file" accept="image/*" capture="environment" style="display: none;" onchange="handleMultiOCRImage(event)">
             </label>
             <p style="font-size: 12px; color: #666; margin-bottom: 0; margin-top: 15px;">Your device's native camera guarantees the best focus and resolution.</p>
         </div>
     `;
+    document.getElementById('scanner-mode-toggles').style.display = 'none';
 }
 
-function handleOCRImage(event) {
+function stopScanner() {
+    document.getElementById('scanner-modal').style.display = 'none';
+    
+    const modalBox = document.querySelector('#scanner-modal > div');
+    if (modalBox) {
+        modalBox.style.width = '450px';
+        modalBox.style.height = 'auto';
+    }
+    window.multiScanState = { assetName: null, activeAttribute: null, boxes: [], imageObj: null };
+}
+
+function handleMultiOCRImage(event) {
     const file = event.target.files[0];
     if(!file) return;
 
@@ -2349,53 +2235,86 @@ function handleOCRImage(event) {
     reader.onload = (e) => {
         const img = new Image();
         img.onload = () => {
-            window.ocrImageObj = img;
-            renderCropperUI(img);
+            window.multiScanState.imageObj = img;
+            renderMultiCropperUI(img);
         };
         img.src = e.target.result;
     };
     reader.readAsDataURL(file);
 }
 
-// 4. Draw the FULL SCREEN UI with flawless "Hug Wrapper" Math
-function renderCropperUI(img) {
+function renderMultiCropperUI(img) {
     const viewport = document.getElementById('scanner-viewport');
-    
-    // --- NEW: Expand the modal to take up 95% of the entire screen ---
     const modalBox = document.querySelector('#scanner-modal > div');
     if (modalBox) {
         modalBox.style.width = '95vw';
         modalBox.style.height = '95vh';
     }
     
-    // Make the viewport stretch to fill the newly expanded modal
     viewport.style.display = 'flex';
     viewport.style.flexDirection = 'column';
     viewport.style.height = '100%';
     viewport.style.flex = '1';
 
-    // The inner 'inline-block' wrapper completely eliminates letterboxing!
+    // Gather attributes from the currently displayed inputs
+    const attrInputs = document.querySelectorAll('.attr-input-field');
+    let attrHtml = '';
+    attrInputs.forEach(input => {
+        const key = input.getAttribute('data-key');
+        let display = key;
+        if (key.includes(':')) display = key.split(':')[1].trim();
+        const safeKey = key.replace(/'/g, "\\'");
+        attrHtml += `<button class="attr-sel-btn" data-key="${key}" onclick="selectMultiAttribute('${safeKey}', '${display}')" style="background:#f1f3f4; border:1px solid #ccc; padding:6px 10px; margin:4px; border-radius:15px; cursor:pointer; font-size:12px; white-space:nowrap; transition:0.2s;">${display}</button>`;
+    });
+
     viewport.innerHTML = `
-        <p style="text-align:center; font-weight:bold; color:#1976d2; margin: 0 0 10px 0; flex-shrink: 0;">Draw a box around the text</p>
+        <div style="padding: 10px; background: #fff; border-bottom: 1px solid #eee; display: flex; flex-wrap: wrap; max-height: 140px; overflow-y: auto; flex-shrink: 0;" id="multi-attr-toolbar">
+            <div style="width: 100%; font-size: 12px; font-weight: bold; color: #666; margin-bottom: 5px;">1. Select an attribute below:</div>
+            ${attrHtml}
+        </div>
+        <p id="multi-instruction" style="text-align:center; font-weight:bold; color:#1976d2; margin: 10px 0; flex-shrink: 0;">Select an attribute to draw a box.</p>
         <div id="crop-container" style="position:relative; width:100%; flex: 1; display:flex; justify-content:center; align-items:center; overflow:hidden; touch-action: none; background: #000; border-radius: 8px;">
             <div style="position: relative; display: inline-block; max-width: 100%; max-height: 100%;">
-                <img id="crop-img" src="${img.src}" style="max-width:100%; max-height:65vh; display:block; pointer-events:none;">
-                <div id="crop-box" style="position:absolute; border:2px solid #00ff00; background:rgba(0,255,0,0.2); display:none; pointer-events:none; z-index:5;"></div>
+                <img id="crop-img" src="${img.src}" style="max-width:100%; max-height:calc(95vh - 300px); display:block; pointer-events:none;">
+                <div id="boxes-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:4;"></div>
+                <div id="current-box" style="position:absolute; border:2px dashed #ff9800; background:rgba(255,152,0,0.2); display:none; pointer-events:none; z-index:5;"></div>
                 <div id="crop-touch-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:10; cursor: crosshair;"></div>
             </div>
         </div>
-        <button id="ocr-process-btn" onclick="processCropAndRead()" style="width: 100%; margin-top: 15px; padding: 14px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px; display:none; box-shadow: 0 2px 4px rgba(0,0,0,0.2); flex-shrink: 0;">✅ Read Selected Text</button>
-        <p id="ocr-status-text" style="text-align:center; color:#666; font-size:13px; margin-top:10px; flex-shrink: 0;"></p>
+        <div style="display:flex; gap:10px; margin-top:15px; flex-shrink: 0;">
+            <button onclick="clearMultiBoxes()" style="flex:1; padding: 14px; background: #f44336; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px;">Clear Boxes</button>
+            <button id="ocr-process-btn" onclick="processMultiCropAndRead()" style="flex:2; padding: 14px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px;">✅ Process <span id="box-count-badge">0</span> Boxes</button>
+        </div>
+        <p id="ocr-status-text" style="text-align:center; color:#666; font-size:13px; margin-top:10px; flex-shrink: 0; height: 15px;"></p>
     `;
 
+    setupMultiDrawing();
+}
+
+function selectMultiAttribute(key, display) {
+    window.multiScanState.activeAttribute = { key, display };
+    document.querySelectorAll('.attr-sel-btn').forEach(b => {
+        b.style.background = '#f1f3f4';
+        b.style.color = '#000';
+        b.style.borderColor = '#ccc';
+    });
+    const btn = document.querySelector(`.attr-sel-btn[data-key="${key}"]`);
+    if (btn) {
+        btn.style.background = '#e3f2fd';
+        btn.style.color = '#1565c0';
+        btn.style.borderColor = '#1565c0';
+    }
+    document.getElementById('multi-instruction').innerText = `2. Draw a box for: ${display}`;
+}
+
+function setupMultiDrawing() {
     const layer = document.getElementById('crop-touch-layer');
-    const box = document.getElementById('crop-box');
+    const currentBox = document.getElementById('current-box');
     
     let startX, startY;
     let isDrawing = false;
     let rectW, rectH;
 
-    // The math is now incredibly simple because the layer EXACTLY matches the image
     const getPos = (e) => {
         const rect = layer.getBoundingClientRect();
         let clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -2404,7 +2323,6 @@ function renderCropperUI(img) {
         let x = clientX - rect.left;
         let y = clientY - rect.top;
         
-        // Lock dragging to inside the photo bounds
         x = Math.max(0, Math.min(x, rect.width));
         y = Math.max(0, Math.min(y, rect.height));
         
@@ -2412,6 +2330,10 @@ function renderCropperUI(img) {
     };
 
     const onStart = (e) => {
+        if (!window.multiScanState.activeAttribute) {
+            alert("Please select an attribute from the top list first!");
+            return;
+        }
         e.preventDefault();
         isDrawing = true;
         const pos = getPos(e);
@@ -2420,12 +2342,11 @@ function renderCropperUI(img) {
         rectW = pos.width;
         rectH = pos.height;
         
-        box.style.left = startX + 'px';
-        box.style.top = startY + 'px';
-        box.style.width = '0px';
-        box.style.height = '0px';
-        box.style.display = 'block';
-        document.getElementById('ocr-process-btn').style.display = 'none';
+        currentBox.style.left = startX + 'px';
+        currentBox.style.top = startY + 'px';
+        currentBox.style.width = '0px';
+        currentBox.style.height = '0px';
+        currentBox.style.display = 'block';
     };
 
     const onMove = (e) => {
@@ -2438,29 +2359,48 @@ function renderCropperUI(img) {
         const width = Math.abs(pos.x - startX);
         const height = Math.abs(pos.y - startY);
 
-        box.style.left = left + 'px';
-        box.style.top = top + 'px';
-        box.style.width = width + 'px';
-        box.style.height = height + 'px';
-        
-        // Exact percentages to pass to the processing function
-        window.cropRect = {
-            leftPct: left / rectW,
-            topPct: top / rectH,
-            widthPct: width / rectW,
-            heightPct: height / rectH
-        };
+        currentBox.style.left = left + 'px';
+        currentBox.style.top = top + 'px';
+        currentBox.style.width = width + 'px';
+        currentBox.style.height = height + 'px';
     };
 
     const onEnd = (e) => {
         if (!isDrawing) return;
         isDrawing = false;
-        if (window.cropRect && window.cropRect.widthPct > 0.02 && window.cropRect.heightPct > 0.02) {
-            document.getElementById('ocr-process-btn').style.display = 'block';
-        } else {
-            box.style.display = 'none';
-            window.cropRect = null;
+        
+        const w = parseFloat(currentBox.style.width);
+        const h = parseFloat(currentBox.style.height);
+        
+        if (w > 10 && h > 10) { 
+            const left = parseFloat(currentBox.style.left);
+            const top = parseFloat(currentBox.style.top);
+            
+            const newBox = {
+                id: 'box_' + Date.now(),
+                key: window.multiScanState.activeAttribute.key,
+                display: window.multiScanState.activeAttribute.display,
+                rect: {
+                    leftPct: left / rectW,
+                    topPct: top / rectH,
+                    widthPct: w / rectW,
+                    heightPct: h / rectH
+                }
+            };
+            
+            window.multiScanState.boxes.push(newBox);
+            renderSavedBoxes();
+            document.getElementById('box-count-badge').innerText = window.multiScanState.boxes.length;
+            
+            window.multiScanState.activeAttribute = null;
+            document.querySelectorAll('.attr-sel-btn').forEach(b => {
+                b.style.background = '#f1f3f4';
+                b.style.color = '#000';
+                b.style.borderColor = '#ccc';
+            });
+            document.getElementById('multi-instruction').innerText = `1. Select an attribute below:`;
         }
+        currentBox.style.display = 'none';
     };
 
     layer.addEventListener('mousedown', onStart);
@@ -2473,216 +2413,122 @@ function renderCropperUI(img) {
     layer.addEventListener('touchend', onEnd);
 }
 
-// 5. Crop the high-res image and send to Google
-async function processCropAndRead() {
-    if (!window.ocrImageObj || !window.cropRect) return;
+function renderSavedBoxes() {
+    const layer = document.getElementById('boxes-layer');
+    layer.innerHTML = '';
+    
+    window.multiScanState.boxes.forEach(box => {
+        const boxEl = document.createElement('div');
+        boxEl.style.position = 'absolute';
+        boxEl.style.left = (box.rect.leftPct * 100) + '%';
+        boxEl.style.top = (box.rect.topPct * 100) + '%';
+        boxEl.style.width = (box.rect.widthPct * 100) + '%';
+        boxEl.style.height = (box.rect.heightPct * 100) + '%';
+        boxEl.style.border = '2px solid #00e676';
+        boxEl.style.background = 'rgba(0, 230, 118, 0.2)';
+        
+        const label = document.createElement('div');
+        label.innerText = box.display;
+        label.style.position = 'absolute';
+        label.style.bottom = '100%';
+        label.style.left = '-2px';
+        label.style.background = '#00e676';
+        label.style.color = '#000';
+        label.style.fontSize = '10px';
+        label.style.fontWeight = 'bold';
+        label.style.padding = '2px 4px';
+        label.style.whiteSpace = 'nowrap';
+        
+        boxEl.appendChild(label);
+        layer.appendChild(boxEl);
+    });
+}
+
+function clearMultiBoxes() {
+    window.multiScanState.boxes = [];
+    renderSavedBoxes();
+    document.getElementById('box-count-badge').innerText = '0';
+}
+
+async function processMultiCropAndRead() {
+    if (window.multiScanState.boxes.length === 0) {
+        alert("Please draw at least one box.");
+        return;
+    }
 
     const btn = document.getElementById('ocr-process-btn');
     const status = document.getElementById('ocr-status-text');
     btn.disabled = true;
-    btn.innerText = "Transmitting to Google Vision...";
-    status.innerText = "Extracting text...";
     
     const imgEl = document.getElementById('crop-img');
-    const rect = window.cropRect;
-    
-    // 1. Calculate the exact coordinates from the original high-resolution image
     const nw = imgEl.naturalWidth;
     const nh = imgEl.naturalHeight;
-    
-    const sx = nw * rect.leftPct;
-    const sy = nh * rect.topPct;
-    const sw = nw * rect.widthPct;
-    const sh = nh * rect.heightPct;
-
-    // 2. Add a thick white padding border. 
-    // Google Vision works best when text isn't touching the absolute edge of the image.
     const PADDING = 60;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = sw + (PADDING * 2);
-    canvas.height = sh + (PADDING * 2);
-    const ctx = canvas.getContext('2d');
     
-    // Fill the background with solid white
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let successCount = 0;
 
-    // Draw the specific cropped area into the center of our white canvas
-    // (We also add a slight contrast boost in case the metal nameplate is faded)
-    ctx.filter = 'contrast(1.2)';
-    ctx.drawImage(window.ocrImageObj, sx, sy, sw, sh, PADDING, PADDING, sw, sh);
-
-    // Convert to a high-quality JPEG
-    const base64Image = canvas.toDataURL('image/jpeg', 1.0);
-
-    try {
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'ocrImage', image: base64Image })
-        });
-        const result = await response.json();
+    for (let i = 0; i < window.multiScanState.boxes.length; i++) {
+        const box = window.multiScanState.boxes[i];
+        status.innerText = `Processing box ${i + 1} of ${window.multiScanState.boxes.length} (${box.display})...`;
         
-        if (result.success && result.text && result.text.trim()) {
-            const extractedText = result.text.replace(/\n+/g, ' ').replace(/[|\[\]{}]/g, '').trim();
-            const userVerifiedText = prompt("Verify and edit the scanned text if necessary:", extractedText);
+        const sx = nw * box.rect.leftPct;
+        const sy = nh * box.rect.topPct;
+        const sw = nw * box.rect.widthPct;
+        const sh = nh * box.rect.heightPct;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = sw + (PADDING * 2);
+        canvas.height = sh + (PADDING * 2);
+        const ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.filter = 'contrast(1.2)';
+        ctx.drawImage(window.multiScanState.imageObj, sx, sy, sw, sh, PADDING, PADDING, sw, sh);
+
+        const base64Image = canvas.toDataURL('image/jpeg', 1.0);
+
+        try {
+            const response = await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'ocrImage', image: base64Image })
+            });
+            const result = await response.json();
             
-            if (userVerifiedText !== null && userVerifiedText.trim() !== "") {
-                fillAttributeField(userVerifiedText.trim());
+            if (result.success && result.text && result.text.trim()) {
+                const extractedText = result.text.replace(/\n+/g, ' ').replace(/[|\[\]{}]/g, '').trim();
+                
+                const inputField = document.querySelector(`input[data-key="${box.key}"]`);
+                if (inputField) {
+                    injectDataIntoInput(inputField, extractedText);
+                }
+                successCount++;
             } else {
-                btn.disabled = false;
-                btn.innerText = "✅ Read Selected Text";
-                status.innerText = "Ready.";
+                console.warn(`No text found for ${box.display}`);
             }
-        } else {
-            // --- THE VISUAL DEBUGGER ---
-            // If it fails, show the user EXACTLY what was sent to Google Vision
-            document.getElementById('crop-container').innerHTML = `
-                <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#eee;">
-                    <img src="${base64Image}" style="max-width:90%; max-height:90%; object-fit:contain; border: 4px solid red; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
-                </div>
-            `;
-            
-            status.innerHTML = "<span style='color:#d32f2f; font-weight:bold;'>Error: See the red box above.</span>";
-            alert("Google Vision couldn't detect legible text.\n\nWe have displayed EXACTLY what was sent to Google inside the red box above. If the image in the red box is black, cut off, or blurry, try taking the photo again in landscape mode.");
-            
-            // Re-purpose the button to restart the camera
-            btn.innerText = "📸 Take New Photo";
-            btn.style.background = "#1976d2";
-            btn.disabled = false;
-            btn.onclick = initTextScanner;
+        } catch(err) {
+            console.error(`OCR Error on ${box.display}:`, err);
         }
-    } catch(err) {
-        console.error("OCR Error:", err);
-        alert("A connection error occurred.");
-        btn.disabled = false;
-        btn.innerText = "✅ Read Selected Text";
-        status.innerText = "Error.";
     }
+    
+    status.innerText = `Processed ${successCount} values.`;
+    alert(`Extracted ${successCount} values! Please verify them in the grid.`);
+    
+    stopScanner(); 
+    
+    document.getElementById('attr-save-btn').style.display = 'block';
 }
 
-// --- HELPER: FLASHES UI AND INJECTS DATA ---
 function injectDataIntoInput(inputField, value) {
     inputField.value = value;
     
     const parentBox = inputField.parentElement;
     const originalBg = parentBox.style.background;
-    parentBox.style.background = '#e3f2fd'; // Flash light blue to indicate success
+    parentBox.style.background = '#e3f2fd'; 
     setTimeout(() => { parentBox.style.background = originalBg; }, 600);
     
     inputField.dispatchEvent(new Event('input')); 
 }
-
-// --- HELPER: FALLBACK FOR SINGLE TARGET ---
-function fillAttributeField(decodedText, refMatch = null, snMatch = null) {
-    if (!window.currentScanTargetKey) return;
-    
-    let finalValue = decodedText;
-    
-    if (refMatch || snMatch) {
-        const targetLower = window.currentScanTargetKey.toLowerCase();
-        if ((targetLower.includes('model') || targetLower.includes('ref')) && refMatch) {
-            finalValue = refMatch[1];
-        } else if ((targetLower.includes('serial') || targetLower.includes('sn')) && snMatch) {
-            finalValue = snMatch[1];
-        }
-    }
-    
-    const targetKey = window.currentScanTargetKey;
-    stopScanner(); 
-
-    const inputField = document.querySelector(`input[data-key="${targetKey}"]`);
-    if (inputField) {
-        injectDataIntoInput(inputField, finalValue);
-    }
-}
-
-async function saveAttributeChanges(assetName) {
-    const btn = document.getElementById('attr-save-btn');
-    btn.innerText = "Saving...";
-    btn.disabled = true;
-
-    // 1. Scan all inputs to find what changed
-    const inputs = document.querySelectorAll('.attr-input-field');
-    const changes = [];
-
-    inputs.forEach(input => {
-        const originalVal = input.getAttribute('data-original');
-        const currentVal = input.value.trim();
-        const attributeKey = input.getAttribute('data-key');
-
-        if (originalVal !== currentVal) {
-            changes.push({
-                attribute: attributeKey,
-                newValue: currentVal
-            });
-        }
-    });
-
-    if (changes.length === 0) {
-        btn.innerText = "No Changes Detected";
-        setTimeout(() => {
-            btn.innerText = "Save Changes";
-            btn.style.display = 'none';
-            btn.disabled = false;
-        }, 2000);
-        return;
-    }
-
-    // 2. Send the payload to Google Apps Script
-    try {
-        const payload = {
-            action: 'saveAttributes',
-            assetName: assetName,
-            changes: changes
-        };
-
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            btn.innerText = "Saved Successfully!";
-            btn.style.background = "#1565c0"; // Turn blue to indicate success
-            
-            // Update the 'original' dataset so it doesn't trigger as a change again
-            inputs.forEach(input => {
-                input.setAttribute('data-original', input.value.trim());
-            });
-
-            // Update the local cached array so switching assets doesn't lose data
-            const cachedAsset = cachedAttributesData.find(a => (a['Asset Name'] || a['Asset']) === assetName);
-            if (cachedAsset) {
-                changes.forEach(change => {
-                    cachedAsset[change.attribute] = change.newValue;
-                });
-            }
-
-            setTimeout(() => {
-                btn.style.display = 'none';
-                btn.style.background = "#2e7d32"; // Revert to green
-                btn.innerText = "Save Changes";
-                btn.disabled = false;
-            }, 2500);
-
-        } else {
-            throw new Error(result.error);
-        }
-    } catch (error) {
-        console.error("Error saving attributes:", error);
-        btn.innerText = "Error Saving";
-        btn.style.background = "#d32f2f";
-        setTimeout(() => {
-            btn.innerText = "Save Changes";
-            btn.style.background = "#2e7d32";
-            btn.disabled = false;
-        }, 3000);
-    }
-}
-
 function filterAssetDirectory() {
     const term = document.getElementById('attr-search').value.toLowerCase();
     const filtered = cachedAttributesData.filter(obj => {

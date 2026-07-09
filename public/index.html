@@ -2642,9 +2642,9 @@ function renderMultiCropperUI(img) {
         </div>
         <p id="multi-instruction" style="text-align:center; font-weight:bold; color:#1976d2; margin: 8px 0; flex-shrink: 0; font-size: 13px;">Select an attribute to draw a box.</p>
         
-        <div id="crop-container" style="position:relative; width:100%; flex: 1; min-height: 0; display:flex; justify-content:center; align-items:center; overflow:hidden; touch-action: none; background: #000; border-radius: 8px;">
-            <div style="position: relative; display: inline-block; max-width: 100%; max-height: 100%;">
-                <img id="crop-img" src="${img.src}" style="max-width:100%; max-height:100%; display:block; pointer-events:none; object-fit:contain;">
+        <div id="crop-container" style="position:relative; width:100%; flex: 1; min-height: 0; overflow:auto; background: #000; border-radius: 8px;">
+            <div style="position: relative; display: block; width: 100%;">
+                <img id="crop-img" src="${img.src}" style="width:100%; height:auto; display:block; pointer-events:none;">
                 <div id="boxes-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:4;"></div>
                 <div id="current-box" style="position:absolute; border:2px dashed #ff9800; background:rgba(255,152,0,0.2); display:none; pointer-events:none; z-index:5;"></div>
                 <div id="crop-touch-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:10; cursor: crosshair;"></div>
@@ -2701,10 +2701,14 @@ function setupMultiDrawing() {
 
     const onStart = (e) => {
         if (!window.multiScanState.activeAttribute) {
-            alert("Please select an attribute from the top list first!");
+            // THE FIX: If no attribute is selected, do NOTHING. 
+            // This allows the iPad/browser to naturally scroll the image!
             return;
         }
-        e.preventDefault();
+        
+        // If an attribute is selected, prevent scrolling so they can draw the box
+        if (e.cancelable) e.preventDefault();
+        
         isDrawing = true;
         const pos = getPos(e);
         startX = pos.x;
@@ -2721,7 +2725,10 @@ function setupMultiDrawing() {
 
     const onMove = (e) => {
         if (!isDrawing) return;
-        e.preventDefault();
+        
+        // Keep preventing scroll WHILE actively drawing the box
+        if (e.cancelable) e.preventDefault(); 
+        
         const pos = getPos(e);
         
         const left = Math.min(startX, pos.x);

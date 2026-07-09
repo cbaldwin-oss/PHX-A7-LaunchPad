@@ -3610,7 +3610,9 @@ async function loadAppConfig() {
         const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAppConfig&t=${new Date().getTime()}`);
         const data = await response.json();
         if (data.status === 'success' && data.data) {
-            appConfig = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
+            let parsedData = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
+            // Safely merge the downloaded data with the defaults so nothing breaks
+            appConfig = { ...appConfig, ...parsedData };
         }
     } catch (e) {
         console.error("Failed to load App Config from cloud.", e);
@@ -3782,10 +3784,14 @@ if (permissions.isAuthorized) {
         }
     }
     
-    // Continue with the rest of the launch sequence
+   // Continue with the rest of the launch sequence
     await fetchPHXA7dropdownoptions();
     await loadEquivalentActivities();
     await loadScheduleConfig();
+    
+    // --- THE FIX: Tell the app to download the sidebar config on auto-reload ---
+    await loadAppConfig(); 
+    
     initPresence(user.email); 
     refreshDropdowns();
     await loadData();

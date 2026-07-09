@@ -1140,6 +1140,17 @@ html, body {
         </div>
 
         <div style="border-top: 1px solid #ddd; padding-top: 20px; margin-bottom: 30px;">
+            <h2 style="color: #333; margin: 0;">Navigation Menu</h2>
+            <p style="font-size:12px; color:#666; margin-bottom: 15px;">Select which modules are available on the left sidebar.</p>
+            <div style="display: flex; gap: 20px; font-size: 14px; color: #333;">
+                <label style="display:flex; align-items:center; cursor:pointer;"><input type="checkbox" id="cfg-nav-schedule" style="margin-right:8px; transform:scale(1.2);"> Schedule</label>
+                <label style="display:flex; align-items:center; cursor:pointer;"><input type="checkbox" id="cfg-nav-equipment" style="margin-right:8px; transform:scale(1.2);"> Equipment Tracker</label>
+                <label style="display:flex; align-items:center; cursor:pointer;"><input type="checkbox" id="cfg-nav-attributes" style="margin-right:8px; transform:scale(1.2);"> Asset Attributes</label>
+                <label style="display:flex; align-items:center; cursor:pointer;"><input type="checkbox" id="cfg-nav-dashboard" style="margin-right:8px; transform:scale(1.2);"> Dashboard</label>
+            </div>
+        </div>
+
+        <div style="border-top: 1px solid #ddd; padding-top: 20px; margin-bottom: 30px;">
             <h2 style="color: #333; margin: 0;">Equivalent Activity Statuses</h2>
             <p style="font-size:12px; color:#666; margin-bottom: 15px;">Select which Activity Types apply to each Phase.</p>
             
@@ -1435,6 +1446,42 @@ async function loadScheduleConfig() {
 function saveScheduleConfig() {
     localStorage.setItem('userScheduleConfig', JSON.stringify(scheduleColConfig));
     location.reload(); // Reload to apply changes cleanly
+}
+
+let appConfig = {
+    sidebar: { schedule: true, equipment: true, attributes: true, dashboard: true }
+};
+
+async function loadAppConfig() {
+    try {
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAppConfig`);
+        const data = await response.json();
+        if (data.status === 'success' && data.data && data.data.sidebar) {
+            appConfig = data.data;
+        }
+    } catch (e) {
+        console.error("Failed to load App Config from cloud.", e);
+    }
+    applySidebarConfig();
+}
+
+function applySidebarConfig() {
+    const navSchedule = document.querySelector('.nav-item[onclick*="schedule"]');
+    const navEquipment = document.querySelector('.nav-item[onclick*="equipment"]');
+    const navAttributes = document.querySelector('.nav-item[onclick*="attributes"]');
+    const navDashboard = document.querySelector('.nav-item[onclick*="dashboard"]');
+
+    if (navSchedule) navSchedule.style.display = appConfig.sidebar.schedule ? 'flex' : 'none';
+    if (navEquipment) navEquipment.style.display = appConfig.sidebar.equipment ? 'flex' : 'none';
+    if (navAttributes) navAttributes.style.display = appConfig.sidebar.attributes ? 'flex' : 'none';
+    if (navDashboard) navDashboard.style.display = appConfig.sidebar.dashboard ? 'flex' : 'none';
+    
+    // If the default Schedule view is hidden by the admin, auto-route the user to the first available module
+    if (!appConfig.sidebar.schedule) {
+        if (appConfig.sidebar.equipment && navEquipment) switchMainView('equipment', navEquipment);
+        else if (appConfig.sidebar.attributes && navAttributes) switchMainView('attributes', navAttributes);
+        else if (appConfig.sidebar.dashboard && navDashboard) switchMainView('dashboard', navDashboard);
+    }
 }
 
 const activeSyncs = new Set(); // Track which rows are currently uploading
@@ -3648,6 +3695,7 @@ async function completeAppLaunch() {
         await fetchPHXA7dropdownoptions();
         await loadEquivalentActivities();
         await loadScheduleConfig();
+        await loadAppConfig();
         refreshDropdowns();
         await loadData();
         initRealtimeSync();
@@ -3925,6 +3973,11 @@ function openScheduleConfigModal() {
     document.getElementById('schedule-config-modal').style.display = 'flex';
     // NEW: Render the Equivalent Activities checklists
     loadEquivalentActivities();
+    // Load App Navigation Config into checkboxes
+    document.getElementById('cfg-nav-schedule').checked = appConfig.sidebar.schedule;
+    document.getElementById('cfg-nav-equipment').checked = appConfig.sidebar.equipment;
+    document.getElementById('cfg-nav-attributes').checked = appConfig.sidebar.attributes;
+    document.getElementById('cfg-nav-dashboard').checked = appConfig.sidebar.dashboard;
 }
 
 // Helper to swap array items
@@ -3943,6 +3996,12 @@ async function saveAllSettings(btn) {
     btn.innerText = "Saving to Cloud... ⏳";
     btn.style.opacity = "0.7";
     btn.disabled = true;
+
+    // Gather App Config
+    appConfig.sidebar.schedule = document.getElementById('cfg-nav-schedule').checked;
+    appConfig.sidebar.equipment = document.getElementById('cfg-nav-equipment').checked;
+    appConfig.sidebar.attributes = document.getElementById('cfg-nav-attributes').checked;
+    appConfig.sidebar.dashboard = document.getElementById('cfg-nav-dashboard').checked;
 
     // 2. Gather Schedule Config
     scheduleColConfig.forEach(col => {
@@ -3964,18 +4023,21 @@ async function saveAllSettings(btn) {
     // 4. FIRE ALL CLOUD SAVES AND WAIT FOR THEM TO FINISH
     try {
         await Promise.all([
-            // Save Eq Activities
             fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 body: JSON.stringify({ action: 'setEqActivities', data: equivalentActivitiesConfig }),
                 mode: 'no-cors'
             }),
-            // Save Phase Rules
             savePhaseRules(),
-            // --- NEW: Save Global Schedule Config ---
             fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 body: JSON.stringify({ action: 'setScheduleConfig', data: scheduleColConfig }),
+                mode: 'no-cors'
+            }),
+            // --- ADD THE NEW APP CONFIG SAVE HERE ---
+            fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'setAppConfig', data: appConfig }),
                 mode: 'no-cors'
             })
         ]);

@@ -2358,8 +2358,8 @@ async function saveAttributeChanges(assetName) {
     }
 
     try {
-        // Send the payload to Apps Script (which forwards to CxAlloy and Sheets)
-        const response = await fetch(API_URL, {
+        // --- THE FIX: Use GOOGLE_SCRIPT_URL instead of API_URL ---
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             body: JSON.stringify({
                 action: 'saveAttributes',

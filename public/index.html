@@ -2835,12 +2835,10 @@ async function processMultiCropAndRead() {
     const nh = imgEl.naturalHeight;
     const PADDING = 60;
     
-    let successCount = 0;
+    status.innerText = `Processing all ${window.multiScanState.boxes.length} boxes simultaneously...`;
 
-    for (let i = 0; i < window.multiScanState.boxes.length; i++) {
-        const box = window.multiScanState.boxes[i];
-        status.innerText = `Processing box ${i + 1} of ${window.multiScanState.boxes.length} (${box.display})...`;
-        
+    // 🟢 THE FIX: Map all boxes to an array of promises so they run in parallel
+    const fetchPromises = window.multiScanState.boxes.map(async (box) => {
         const sx = nw * box.rect.leftPct;
         const sy = nh * box.rect.topPct;
         const sw = nw * box.rect.widthPct;
@@ -2867,25 +2865,33 @@ async function processMultiCropAndRead() {
             
             if (result.success && result.text && result.text.trim()) {
                 const extractedText = result.text.replace(/\n+/g, ' ').replace(/[|\[\]{}]/g, '').trim();
-                
-                const inputField = document.querySelector(`input[data-key="${box.key}"]`);
-                if (inputField) {
-                    injectDataIntoInput(inputField, extractedText);
-                }
-                successCount++;
-            } else {
-                console.warn(`No text found for ${box.display}`);
+                return { success: true, box: box, text: extractedText };
             }
+            return { success: false, box: box };
         } catch(err) {
             console.error(`OCR Error on ${box.display}:`, err);
+            return { success: false, box: box };
         }
-    }
+    });
+
+    // Wait for ALL image requests to finish at the exact same time
+    const results = await Promise.all(fetchPromises);
+    
+    let successCount = 0;
+    results.forEach(res => {
+        if (res.success) {
+            const inputField = document.querySelector(`input[data-key="${res.box.key}"]`);
+            if (inputField) {
+                injectDataIntoInput(inputField, res.text);
+            }
+            successCount++;
+        }
+    });
     
     status.innerText = `Processed ${successCount} values.`;
     alert(`Extracted ${successCount} values! Please verify them in the grid.`);
     
     stopScanner(); 
-    
     document.getElementById('attr-save-btn').style.display = 'block';
 }
 

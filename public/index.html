@@ -2359,7 +2359,7 @@ async function saveAttributeChanges(assetName) {
 
     try {
         // Send the payload to Apps Script (which forwards to CxAlloy and Sheets)
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
+        const response = await fetch(API_URL, {
             method: 'POST',
             body: JSON.stringify({
                 action: 'saveAttributes',
@@ -2369,6 +2369,15 @@ async function saveAttributeChanges(assetName) {
         });
         const result = await response.json();
         
+        // --- NEW: Display the Feedback Loop ---
+        if (result.debug && result.debug.length > 0) {
+            console.log("=== CXALLOY WRITE LOGS ===");
+            console.log(result.debug.join('\n'));
+            
+            // Pop up the results so you can see exactly what the API said
+            alert("API Diagnostics:\n\n" + result.debug.join('\n\n'));
+        }
+
         if (result.success) {
             // Update the baseline original values
             inputs.forEach(input => {

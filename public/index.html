@@ -1428,21 +1428,6 @@ const defaultScheduleConfig = [
 
 let scheduleColConfig = defaultScheduleConfig; // Now defaults to global variable
 
-// --- NEW: Fetch config from Google Sheets on load ---
-async function loadScheduleConfig() {
-    try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getScheduleConfig`);
-        const data = await response.json();
-        if (data.status === 'success' && data.data) {
-            scheduleColConfig = data.data;
-        }
-    } catch (e) {
-        console.error("Failed to load Schedule Config from cloud. Using defaults.", e);
-    }
-    // Render headers immediately after we have the cloud data
-    renderDynamicHeaders();
-}
-
 function saveScheduleConfig() {
     localStorage.setItem('userScheduleConfig', JSON.stringify(scheduleColConfig));
     location.reload(); // Reload to apply changes cleanly
@@ -1451,19 +1436,6 @@ function saveScheduleConfig() {
 let appConfig = {
     sidebar: { schedule: true, equipment: true, attributes: true, dashboard: true }
 };
-
-async function loadAppConfig() {
-    try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAppConfig`);
-        const data = await response.json();
-        if (data.status === 'success' && data.data && data.data.sidebar) {
-            appConfig = data.data;
-        }
-    } catch (e) {
-        console.error("Failed to load App Config from cloud.", e);
-    }
-    applySidebarConfig();
-}
 
 function applySidebarConfig() {
     const navSchedule = document.querySelector('.nav-item[onclick*="schedule"]');
@@ -1874,28 +1846,6 @@ function switchMainView(viewType, btn) {
 
 let equivalentActivitiesConfig = { L2: [], L3: [], L4: [] };
 
-async function loadEquivalentActivities() {
-    const phases = ['L2', 'L3', 'L4'];
-    
-    // Show a temporary loading state
-    phases.forEach(phase => {
-        const container = document.getElementById(`eq-act-${phase}-list`);
-        if (container) container.innerHTML = '<div style="color: #999; font-size: 12px; padding: 5px; text-align: center;">Loading from Google Sheets...</div>';
-    });
-    
-    try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getEqActivities`);
-        const data = await response.json();
-        if (data.status === 'success') {
-            equivalentActivitiesConfig = data.data;
-        }
-    } catch (e) {
-        console.error("Failed to load Eq Activities:", e);
-    }
-    
-    // Render the checklists now that we have the data from the sheet
-    renderEquivalentActivitiesUI();
-}
 
 // Helper to render the checklists
 function renderEquivalentActivitiesUI() {
@@ -3034,7 +2984,7 @@ async function loadPhaseRules() {
     tableBody.innerHTML = '';
 
     try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getPhaseRules`);
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getPhaseRules&t=${new Date().getTime()}`);
         const data = await response.json();
 
         if (data.status === 'success' && data.data.length > 0) {
@@ -3638,6 +3588,59 @@ async function verifyPermission(email) {
     return { isAuthorized: true, isAdmin: data.is_admin, company: data.company };
 }
 
+// --- NEW: Fetch config from Google Sheets on load (WITH CACHE BUSTER) ---
+async function loadScheduleConfig() {
+    try {
+        // Appending a timestamp forces the browser to bypass its cache and fetch fresh data
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getScheduleConfig&t=${new Date().getTime()}`);
+        const data = await response.json();
+        if (data.status === 'success' && data.data) {
+            // Failsafe in case it was double-stringified in the database
+            scheduleColConfig = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
+        }
+    } catch (e) {
+        console.error("Failed to load Schedule Config from cloud. Using defaults.", e);
+    }
+    // Render headers immediately after we have the cloud data
+    renderDynamicHeaders();
+}
+
+async function loadAppConfig() {
+    try {
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAppConfig&t=${new Date().getTime()}`);
+        const data = await response.json();
+        if (data.status === 'success' && data.data) {
+            appConfig = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
+        }
+    } catch (e) {
+        console.error("Failed to load App Config from cloud.", e);
+    }
+    applySidebarConfig();
+}
+
+async function loadEquivalentActivities() {
+    const phases = ['L2', 'L3', 'L4'];
+    
+    // Show a temporary loading state
+    phases.forEach(phase => {
+        const container = document.getElementById(`eq-act-${phase}-list`);
+        if (container) container.innerHTML = '<div style="color: #999; font-size: 12px; padding: 5px; text-align: center;">Loading from Google Sheets...</div>';
+    });
+    
+    try {
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getEqActivities&t=${new Date().getTime()}`);
+        const data = await response.json();
+        if (data.status === 'success') {
+            equivalentActivitiesConfig = data.data;
+        }
+    } catch (e) {
+        console.error("Failed to load Eq Activities:", e);
+    }
+    
+    // Render the checklists now that we have the data from the sheet
+    renderEquivalentActivitiesUI();
+}
+
 let isMyActivitiesActive = false;
 
 function toggleMyActivitiesFilter() {
@@ -4020,7 +4023,7 @@ async function saveAllSettings(btn) {
         }
     });
 
-    // 4. FIRE ALL CLOUD SAVES AND WAIT FOR THEM TO FINISH
+// 4. FIRE ALL CLOUD SAVES AND WAIT FOR THEM TO FINISH
     try {
         await Promise.all([
             fetch(GOOGLE_SCRIPT_URL, {
@@ -4034,20 +4037,26 @@ async function saveAllSettings(btn) {
                 body: JSON.stringify({ action: 'setScheduleConfig', data: scheduleColConfig }),
                 mode: 'no-cors'
             }),
-            // --- ADD THE NEW APP CONFIG SAVE HERE ---
             fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 body: JSON.stringify({ action: 'setAppConfig', data: appConfig }),
                 mode: 'no-cors'
             })
         ]);
-        console.log("All settings successfully saved to cloud.");
+        console.log("All settings successfully dispatched to cloud.");
+        
+        // --- THE FIX: WAIT FOR GOOGLE SHEETS TO FINISH WRITING ---
+        // Because these run in the background, we MUST pause to give Google Sheets 
+        // time to write the data to the cells before we reload the app!
+        btn.innerText = "Finalizing... ⏳";
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        
     } catch (e) {
         console.error("Cloud save error:", e);
         alert("There was an issue saving to Google Sheets, but local changes were applied.");
     }
 
-    // 5. Finally, reload the page cleanly
+    // 5. Finally, reload the page cleanly to fetch the newly written data
     location.reload(); 
 }
 

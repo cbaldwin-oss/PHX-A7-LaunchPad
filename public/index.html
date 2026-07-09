@@ -2358,7 +2358,6 @@ async function saveAttributeChanges(assetName) {
     }
 
     try {
-        // --- THE FIX: Use GOOGLE_SCRIPT_URL instead of API_URL ---
         const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             body: JSON.stringify({
@@ -2369,16 +2368,24 @@ async function saveAttributeChanges(assetName) {
         });
         const result = await response.json();
         
-        // --- NEW: Display the Feedback Loop ---
+        let hasError = false;
+
+        // --- THE FIX: Silent Logging ---
         if (result.debug && result.debug.length > 0) {
+            // Silently print to the browser console for future troubleshooting
             console.log("=== CXALLOY WRITE LOGS ===");
             console.log(result.debug.join('\n'));
             
-            // Pop up the results so you can see exactly what the API said
-            alert("API Diagnostics:\n\n" + result.debug.join('\n\n'));
+            // Check if the backend flagged an error or a failure
+            hasError = result.debug.some(log => log.includes('❌') || log.includes('ERROR'));
+
+            // ONLY pop up an alert if an error occurred
+            if (hasError || !result.success) {
+                alert("CxAlloy Sync Error:\n\n" + result.debug.join('\n\n'));
+            }
         }
 
-        if (result.success) {
+        if (result.success && !hasError) {
             // Update the baseline original values
             inputs.forEach(input => {
                 input.setAttribute('data-original', input.value);
@@ -2392,8 +2399,12 @@ async function saveAttributeChanges(assetName) {
             
             // Silently refresh the local cached data
             fetchAssetAttributes(false);
-        } else {
+        } else if (!hasError) {
             throw new Error(result.error || "Unknown error saving attributes.");
+        } else {
+            // Reset the button if an error was caught so you can try again
+            btn.innerText = "Save Changes";
+            btn.disabled = false;
         }
     } catch (err) {
         console.error(err);

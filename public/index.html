@@ -2493,10 +2493,27 @@ function stopScanner() {
     document.getElementById('scanner-modal').style.display = 'none';
     
     const modalBox = document.querySelector('#scanner-modal > div');
+    const viewport = document.getElementById('scanner-viewport');
+    const modalBody = viewport ? viewport.parentElement : null;
+    
+    // Reset window width
     if (modalBox) {
         modalBox.style.width = '450px';
         modalBox.style.height = 'auto';
     }
+    
+    // Reset Flexbox constraints
+    if (modalBody) {
+        modalBody.style.display = 'block';
+        modalBody.style.overflow = 'visible';
+        modalBody.style.padding = '20px';
+    }
+    
+    if (viewport) {
+        viewport.style.display = 'block';
+        viewport.style.height = 'auto';
+    }
+
     // Clear out the group name upon closing
     window.multiScanState = { assetName: null, groupName: null, activeAttribute: null, boxes: [], imageObj: null };
 }
@@ -2556,21 +2573,37 @@ function startMultiScanner(assetName, groupName) { // --- NEW: Accepts groupName
 function renderMultiCropperUI(img) {
     const viewport = document.getElementById('scanner-viewport');
     const modalBox = document.querySelector('#scanner-modal > div');
+    const modalBody = viewport.parentElement; // The container holding the viewport
+    
+    // Maximize the modal window
     if (modalBox) {
         modalBox.style.width = '95vw';
         modalBox.style.height = '95vh';
     }
     
+    // Apply Flexbox to the modal body so it doesn't overflow
+    if (modalBody) {
+        modalBody.style.display = 'flex';
+        modalBody.style.flexDirection = 'column';
+        modalBody.style.flex = '1';
+        modalBody.style.overflow = 'hidden';
+        modalBody.style.padding = '15px'; // Slightly tighter padding
+    }
+    
+    // Apply Flexbox to the viewport itself
     viewport.style.display = 'flex';
     viewport.style.flexDirection = 'column';
     viewport.style.height = '100%';
     viewport.style.flex = '1';
+    viewport.style.overflow = 'hidden';
 
-    // --- NEW: Filter buttons strictly by the active group ---
+    // Gather ONLY the attributes matching the active group
+    const safeGroup = window.multiScanState.groupName ? window.multiScanState.groupName.replace(/"/g, '\\"') : null;
     const allInputs = Array.from(document.querySelectorAll('.attr-input-field'));
     const attrInputs = allInputs.filter(input => {
-        const inputGroup = input.getAttribute('data-group').replace(/&quot;/g, '"');
-        return !window.multiScanState.groupName || inputGroup === window.multiScanState.groupName;
+        const inputGroup = input.getAttribute('data-group');
+        if (!inputGroup) return true;
+        return !window.multiScanState.groupName || inputGroup.replace(/&quot;/g, '"') === window.multiScanState.groupName;
     });
 
     let attrHtml = '';
@@ -2579,28 +2612,33 @@ function renderMultiCropperUI(img) {
         let display = key;
         if (key.includes(':')) display = key.split(':')[1].trim();
         const safeKey = key.replace(/'/g, "\\'");
-        attrHtml += `<button class="attr-sel-btn" data-key="${key}" onclick="selectMultiAttribute('${safeKey}', '${display}')" style="background:#f1f3f4; border:1px solid #ccc; padding:6px 10px; margin:4px; border-radius:15px; cursor:pointer; font-size:12px; white-space:nowrap; transition:0.2s;">${display}</button>`;
+        
+        // Added flex-shrink: 0 so the buttons don't warp
+        attrHtml += `<button class="attr-sel-btn" data-key="${key}" onclick="selectMultiAttribute('${safeKey}', '${display}')" style="background:#f1f3f4; border:1px solid #ccc; padding:6px 10px; margin:4px; border-radius:15px; cursor:pointer; font-size:12px; white-space:nowrap; transition:0.2s; flex-shrink:0;">${display}</button>`;
     });
 
+    // NOTE: The crop-container now has `min-height: 0` which forces it to shrink instead of pushing the bottom buttons off screen!
     viewport.innerHTML = `
-        <div style="padding: 10px; background: #fff; border-bottom: 1px solid #eee; display: flex; flex-wrap: wrap; max-height: 140px; overflow-y: auto; flex-shrink: 0;" id="multi-attr-toolbar">
+        <div style="padding: 10px; background: #fff; border-bottom: 1px solid #eee; display: flex; flex-wrap: wrap; max-height: 120px; overflow-y: auto; flex-shrink: 0;" id="multi-attr-toolbar">
             <div style="width: 100%; font-size: 12px; font-weight: bold; color: #666; margin-bottom: 5px;">1. Select an attribute below:</div>
             ${attrHtml}
         </div>
-        <p id="multi-instruction" style="text-align:center; font-weight:bold; color:#1976d2; margin: 10px 0; flex-shrink: 0;">Select an attribute to draw a box.</p>
-        <div id="crop-container" style="position:relative; width:100%; flex: 1; display:flex; justify-content:center; align-items:center; overflow:hidden; touch-action: none; background: #000; border-radius: 8px;">
+        <p id="multi-instruction" style="text-align:center; font-weight:bold; color:#1976d2; margin: 8px 0; flex-shrink: 0; font-size: 13px;">Select an attribute to draw a box.</p>
+        
+        <div id="crop-container" style="position:relative; width:100%; flex: 1; min-height: 0; display:flex; justify-content:center; align-items:center; overflow:hidden; touch-action: none; background: #000; border-radius: 8px;">
             <div style="position: relative; display: inline-block; max-width: 100%; max-height: 100%;">
-                <img id="crop-img" src="${img.src}" style="max-width:100%; max-height:calc(95vh - 300px); display:block; pointer-events:none;">
+                <img id="crop-img" src="${img.src}" style="max-width:100%; max-height:100%; display:block; pointer-events:none; object-fit:contain;">
                 <div id="boxes-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:4;"></div>
                 <div id="current-box" style="position:absolute; border:2px dashed #ff9800; background:rgba(255,152,0,0.2); display:none; pointer-events:none; z-index:5;"></div>
                 <div id="crop-touch-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:10; cursor: crosshair;"></div>
             </div>
         </div>
-        <div style="display:flex; gap:10px; margin-top:15px; flex-shrink: 0;">
-            <button onclick="clearMultiBoxes()" style="flex:1; padding: 14px; background: #f44336; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px;">Clear Boxes</button>
-            <button id="ocr-process-btn" onclick="processMultiCropAndRead()" style="flex:2; padding: 14px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 16px;">✅ Process <span id="box-count-badge">0</span> Boxes</button>
+        
+        <div style="display:flex; gap:10px; margin-top:12px; flex-shrink: 0;">
+            <button onclick="clearMultiBoxes()" style="flex:1; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 15px;">Clear Boxes</button>
+            <button id="ocr-process-btn" onclick="processMultiCropAndRead()" style="flex:2; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 15px;">✅ Process <span id="box-count-badge">0</span> Boxes</button>
         </div>
-        <p id="ocr-status-text" style="text-align:center; color:#666; font-size:13px; margin-top:10px; flex-shrink: 0; height: 15px;"></p>
+        <p id="ocr-status-text" style="text-align:center; color:#666; font-size:12px; margin-top:6px; margin-bottom:0; flex-shrink: 0; min-height: 15px;"></p>
     `;
 
     setupMultiDrawing();

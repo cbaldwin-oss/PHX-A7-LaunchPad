@@ -2651,14 +2651,89 @@ function renderMultiCropperUI(img) {
             </div>
         </div>
         
-        <div style="display:flex; gap:10px; margin-top:12px; flex-shrink: 0;">
-            <button onclick="clearMultiBoxes()" style="flex:1; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 15px;">Clear Boxes</button>
-            <button id="ocr-process-btn" onclick="processMultiCropAndRead()" style="flex:2; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 15px;">✅ Process <span id="box-count-badge">0</span> Boxes</button>
+        <div style="display:flex; gap:10px; margin-top:12px; flex-shrink: 0; flex-wrap: wrap;">
+            <button onclick="clearMultiBoxes()" style="flex:1; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px;">Clear</button>
+            <button id="save-photos-btn" onclick="saveMultiCropPhotosOnly()" style="flex:1.5; padding: 12px; background: #1976d2; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px;">💾 Save Photos</button>
+            <button id="ocr-process-btn" onclick="processMultiCropAndRead()" style="flex:2; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px;">✅ Process <span id="box-count-badge">0</span></button>
         </div>
         <p id="ocr-status-text" style="text-align:center; color:#666; font-size:12px; margin-top:6px; margin-bottom:0; flex-shrink: 0; min-height: 15px;"></p>
     `;
 
     setupMultiDrawing();
+}
+
+async function saveMultiCropPhotosOnly() {
+    if (window.multiScanState.boxes.length === 0) {
+        alert("Please draw at least one box to save.");
+        return;
+    }
+
+    const btn = document.getElementById('save-photos-btn');
+    const status = document.getElementById('ocr-status-text');
+    const ocrBtn = document.getElementById('ocr-process-btn');
+    
+    btn.disabled = true;
+    ocrBtn.disabled = true;
+    
+    const imgEl = document.getElementById('crop-img');
+    const nw = imgEl.naturalWidth;
+    const nh = imgEl.naturalHeight;
+    const PADDING = 60;
+    
+    status.innerText = `Saving ${window.multiScanState.boxes.length} photos to Drive...`;
+
+    // Map all boxes to an array of promises so they run in parallel
+    const fetchPromises = window.multiScanState.boxes.map(async (box) => {
+        const sx = nw * box.rect.leftPct;
+        const sy = nh * box.rect.topPct;
+        const sw = nw * box.rect.widthPct;
+        const sh = nh * box.rect.heightPct;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = sw + (PADDING * 2);
+        canvas.height = sh + (PADDING * 2);
+        const ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.filter = 'contrast(1.2)';
+        ctx.drawImage(window.multiScanState.imageObj, sx, sy, sw, sh, PADDING, PADDING, sw, sh);
+
+        const base64Image = canvas.toDataURL('image/jpeg', 1.0);
+
+        try {
+            const response = await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    action: 'saveImageOnly',   // 🟢 Targets the new Google Drive Only backend function
+                    image: base64Image,
+                    assetName: window.multiScanState.assetName,
+                    attributeName: box.display 
+                })
+            });
+            const result = await response.json();
+            return { success: result.success, box: box };
+        } catch(err) {
+            console.error(`Save Error on ${box.display}:`, err);
+            return { success: false, box: box };
+        }
+    });
+
+    // Wait for ALL image requests to finish at the exact same time
+    const results = await Promise.all(fetchPromises);
+    
+    let successCount = 0;
+    results.forEach(res => {
+        if (res.success) successCount++;
+    });
+    
+    status.innerText = `Saved ${successCount} photos.`;
+    alert(`Successfully saved ${successCount} photos to your Google Drive!`);
+    
+    // Reset buttons so you can continue using the interface
+    btn.disabled = false;
+    ocrBtn.disabled = false;
+    clearMultiBoxes();
 }
 
 function selectMultiAttribute(key, display) {

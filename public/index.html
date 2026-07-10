@@ -2680,57 +2680,60 @@ async function saveMultiCropPhotosOnly() {
     const nw = img.naturalWidth;
     const nh = img.naturalHeight;
 
-    // 1. Create a canvas matching the exact size of the original photo
     const canvas = document.createElement('canvas');
     canvas.width = nw;
     canvas.height = nh;
     const ctx = canvas.getContext('2d');
     
-    // 2. Draw the original photo as the base layer
     ctx.drawImage(img, 0, 0, nw, nh);
 
-    // 3. Set dynamic line width and font size based on image resolution
-    const lineW = Math.max(5, nw * 0.005);
-    ctx.lineWidth = lineW;
-    ctx.font = `bold ${Math.max(24, nw * 0.025)}px Arial`;
+    // --- THE TEXT SIZE FIX ---
+    // Reduced the multiplier to make the lines slightly thinner and the font much smaller
+    const lineW = Math.max(3, nw * 0.003); 
+    const fontSize = Math.max(14, nw * 0.012); 
     
-    // 4. Loop through all boxes and draw them onto the image
+    ctx.lineWidth = lineW;
+    ctx.font = `bold ${fontSize}px Arial`;
+    
     window.multiScanState.boxes.forEach(box => {
         const sx = nw * box.rect.leftPct;
         const sy = nh * box.rect.topPct;
         const sw = nw * box.rect.widthPct;
         const sh = nh * box.rect.heightPct;
 
-        // Draw Green Box Border
+        // Draw Box
         ctx.strokeStyle = '#00e676'; 
         ctx.strokeRect(sx, sy, sw, sh);
-        
-        // Draw Semi-Transparent Green Fill
         ctx.fillStyle = 'rgba(0, 230, 118, 0.2)';
         ctx.fillRect(sx, sy, sw, sh);
 
-        // Draw Label Background Strip (above the box)
+        // Draw Label Background Strip (Scaled down to tightly fit the smaller text)
         const textWidth = ctx.measureText(box.display).width;
+        const padding = fontSize * 0.4;
         ctx.fillStyle = '#00e676';
-        ctx.fillRect(sx, sy - (lineW * 6), textWidth + 20, lineW * 6);
+        ctx.fillRect(sx, sy - fontSize - (padding * 2), textWidth + (padding * 2), fontSize + (padding * 2));
 
         // Draw Label Text
         ctx.fillStyle = '#000000';
         ctx.textBaseline = "bottom";
-        ctx.fillText(box.display, sx + 10, sy - 5);
+        ctx.fillText(box.display, sx + padding, sy - padding);
     });
 
-    // 5. Convert the finished canvas to a JPEG
-    const base64Image = canvas.toDataURL('image/jpeg', 0.85); // 0.85 compression to keep file size reasonable
+    const base64Image = canvas.toDataURL('image/jpeg', 0.85); 
 
-    // 6. Send the single image to Google Apps Script
+    // --- THE FILENAME FIX ---
+    // Get the unique names of the boxes drawn (e.g., "General", "Model") and join them
+    const uniqueAttributes = [...new Set(window.multiScanState.boxes.map(b => b.display))].slice(0, 3).join('_');
+    const filePrefix = uniqueAttributes || 'Scan';
+
     try {
         const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             body: JSON.stringify({ 
                 action: 'saveImageOnly',
                 image: base64Image,
-                assetName: window.multiScanState.assetName
+                assetName: window.multiScanState.assetName,
+                scanType: filePrefix // 🟢 Sends "General" to the backend for the filename
             })
         });
         

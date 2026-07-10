@@ -2687,50 +2687,96 @@ async function saveMultiCropPhotosOnly() {
     
     ctx.drawImage(img, 0, 0, nw, nh);
 
-    // --- THE TEXT SIZE FIX ---
-    // Reduced the font size multiplier from 0.012 to 0.008 for much smaller text
     const lineW = Math.max(3, nw * 0.003); 
     const fontSize = Math.max(12, nw * 0.008); 
     
     ctx.lineWidth = lineW;
     ctx.font = `bold ${fontSize}px Arial`;
     
-    window.multiScanState.boxes.forEach(box => {
-        const sx = nw * box.rect.leftPct;
-        const sy = nh * box.rect.topPct;
-        const sw = nw * box.rect.widthPct;
-        const sh = nh * box.rect.heightPct;
+    // 1. Gather all boxes as "obstacles" in pixel coordinates
+    const obstacles = [];
+    const boxesData = window.multiScanState.boxes.map(box => {
+        return {
+            display: box.display,
+            x: nw * box.rect.leftPct,
+            y: nh * box.rect.topPct,
+            w: nw * box.rect.widthPct,
+            h: nh * box.rect.heightPct
+        };
+    });
 
-        // Draw Box
+    // 2. Draw the transparent boxes first, and add them to the obstacle list
+    boxesData.forEach(b => {
         ctx.strokeStyle = '#00e676'; 
-        ctx.strokeRect(sx, sy, sw, sh);
+        ctx.strokeRect(b.x, b.y, b.w, b.h);
         ctx.fillStyle = 'rgba(0, 230, 118, 0.2)';
-        ctx.fillRect(sx, sy, sw, sh);
-
-        // Calculate Label Dimensions
-        const textWidth = ctx.measureText(box.display).width;
-        const padding = fontSize * 0.4;
-        const labelHeight = fontSize + (padding * 2);
-        const labelWidth = textWidth + (padding * 2);
-
-        // --- THE CUT-OFF FIX ---
-        // Start by assuming the label goes immediately above the box
-        let labelTopY = sy - labelHeight;
+        ctx.fillRect(b.x, b.y, b.w, b.h);
         
-        // If the label would go off the top edge of the image (less than 0),
-        // force it to draw INSIDE the box, anchored to the top edge.
-        if (labelTopY < 0) {
-            labelTopY = sy;
+        obstacles.push({ x: b.x, y: b.y, w: b.w, h: b.h });
+    });
+
+    // Collision Helper: Checks if a rectangle overlaps with any obstacles or hits the edges
+    const checkCollision = (rect) => {
+        if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > nw || rect.y + rect.h > nh) return true; 
+        for (let obs of obstacles) {
+            if (rect.x < obs.x + obs.w && rect.x + rect.w > obs.x &&
+                rect.y < obs.y + obs.h && rect.y + rect.h > obs.y) {
+                return true; 
+            }
+        }
+        return false;
+    };
+
+    // 3. Calculate label positions using the Collision Engine
+    boxesData.forEach(b => {
+        const textWidth = ctx.measureText(b.display).width;
+        const padding = fontSize * 0.4;
+        const labelW = textWidth + (padding * 2);
+        const labelH = fontSize + (padding * 2);
+        const gap = lineW + 2; // Small gap between the box and the label
+
+        // Test these positions in order of preference
+        const candidates = [
+            { x: b.x, y: b.y - labelH - gap }, // 1. Top Left
+            { x: b.x, y: b.y + b.h + gap },    // 2. Bottom Left
+            { x: b.x + b.w + gap, y: b.y },    // 3. Right Top
+            { x: b.x - labelW - gap, y: b.y }, // 4. Left Top
+            { x: b.x + b.w - labelW, y: b.y - labelH - gap }, // 5. Top Right
+            { x: b.x + b.w - labelW, y: b.y + b.h + gap }     // 6. Bottom Right
+        ];
+
+        let chosenPos = null;
+        for (let pos of candidates) {
+            if (!checkCollision({ x: pos.x, y: pos.y, w: labelW, h: labelH })) {
+                chosenPos = pos;
+                break; // Found a safe spot!
+            }
         }
 
-        // Draw Label Background Strip
+        // Desperate Fallback: If the screen is completely crowded, force it to the best available edge
+        if (!chosenPos) {
+            let clampedY = b.y - labelH - gap;
+            if (clampedY < 0) clampedY = b.y + b.h + gap; 
+            if (clampedY + labelH > nh) clampedY = Math.max(0, b.y - labelH); 
+            
+            let clampedX = b.x;
+            if (clampedX + labelW > nw) clampedX = nw - labelW;
+            if (clampedX < 0) clampedX = 0;
+
+            chosenPos = { x: clampedX, y: clampedY };
+        }
+
+        // Add the newly placed label to the obstacle list so the next labels avoid it!
+        obstacles.push({ x: chosenPos.x, y: chosenPos.y, w: labelW, h: labelH });
+
+        // Draw Label Background
         ctx.fillStyle = '#00e676';
-        ctx.fillRect(sx, labelTopY, labelWidth, labelHeight);
+        ctx.fillRect(chosenPos.x, chosenPos.y, labelW, labelH);
 
         // Draw Label Text
         ctx.fillStyle = '#000000';
-        ctx.textBaseline = "top"; // Using 'top' makes the math much cleaner for bounds checking
-        ctx.fillText(box.display, sx + padding, labelTopY + padding);
+        ctx.textBaseline = "top";
+        ctx.fillText(b.display, chosenPos.x + padding, chosenPos.y + padding);
     });
 
     const base64Image = canvas.toDataURL('image/jpeg', 0.85); 

@@ -2682,7 +2682,6 @@ async function saveMultiCropPhotosOnly() {
     
     status.innerText = `Saving ${window.multiScanState.boxes.length} photos to Drive...`;
 
-    // Map all boxes to an array of promises so they run in parallel
     const fetchPromises = window.multiScanState.boxes.map(async (box) => {
         const sx = nw * box.rect.leftPct;
         const sy = nh * box.rect.topPct;
@@ -2705,35 +2704,52 @@ async function saveMultiCropPhotosOnly() {
             const response = await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 body: JSON.stringify({ 
-                    action: 'saveImageOnly',   // 🟢 Targets the new Google Drive Only backend function
+                    action: 'saveImageOnly',
                     image: base64Image,
                     assetName: window.multiScanState.assetName,
                     attributeName: box.display 
                 })
             });
-            const result = await response.json();
-            return { success: result.success, box: box };
+            
+            // Grab raw text first in case it's not JSON
+            const textResponse = await response.text(); 
+            
+            try {
+                const result = JSON.parse(textResponse);
+                return { success: result.success, error: result.error, box: box };
+            } catch (parseErr) {
+                return { success: false, error: "Google Server Error: " + textResponse.substring(0, 100), box: box };
+            }
         } catch(err) {
-            console.error(`Save Error on ${box.display}:`, err);
-            return { success: false, box: box };
+            return { success: false, error: err.message, box: box };
         }
     });
 
-    // Wait for ALL image requests to finish at the exact same time
     const results = await Promise.all(fetchPromises);
     
     let successCount = 0;
+    let errorMessages = [];
+    
     results.forEach(res => {
-        if (res.success) successCount++;
+        if (res.success) {
+            successCount++;
+        } else {
+            errorMessages.push(`${res.box.display}: ${res.error}`);
+        }
     });
     
     status.innerText = `Saved ${successCount} photos.`;
-    alert(`Successfully saved ${successCount} photos to your Google Drive!`);
     
-    // Reset buttons so you can continue using the interface
+    // Display the results and exactly what went wrong
+    if (errorMessages.length > 0) {
+        alert(`Saved ${successCount} photos.\n\nErrors encountered:\n` + errorMessages.join('\n'));
+    } else {
+        alert(`Successfully saved ${successCount} photos to your Google Drive!`);
+    }
+    
     btn.disabled = false;
     ocrBtn.disabled = false;
-    clearMultiBoxes();
+    if (successCount > 0) clearMultiBoxes();
 }
 
 function selectMultiAttribute(key, display) {

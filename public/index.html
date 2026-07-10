@@ -2866,7 +2866,12 @@ async function processMultiCropAndRead() {
         try {
             const response = await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
-                body: JSON.stringify({ action: 'ocrImage', image: base64Image })
+                body: JSON.stringify({ 
+                    action: 'ocrImage', 
+                    image: base64Image,
+                    assetName: window.multiScanState.assetName, // 🟢 Passes the Asset Name for the Folder
+                    attributeName: box.display                  // 🟢 Passes the Attribute Name for the File
+                })
             });
             const result = await response.json();
             

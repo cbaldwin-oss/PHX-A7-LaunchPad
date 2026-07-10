@@ -2674,82 +2674,85 @@ async function saveMultiCropPhotosOnly() {
     
     btn.disabled = true;
     ocrBtn.disabled = true;
-    
-    const imgEl = document.getElementById('crop-img');
-    const nw = imgEl.naturalWidth;
-    const nh = imgEl.naturalHeight;
-    const PADDING = 60;
-    
-    status.innerText = `Saving ${window.multiScanState.boxes.length} photos to Drive...`;
+    status.innerText = "Saving marked-up photo to Drive...";
 
-    const fetchPromises = window.multiScanState.boxes.map(async (box) => {
+    const img = window.multiScanState.imageObj;
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+
+    // 1. Create a canvas matching the exact size of the original photo
+    const canvas = document.createElement('canvas');
+    canvas.width = nw;
+    canvas.height = nh;
+    const ctx = canvas.getContext('2d');
+    
+    // 2. Draw the original photo as the base layer
+    ctx.drawImage(img, 0, 0, nw, nh);
+
+    // 3. Set dynamic line width and font size based on image resolution
+    const lineW = Math.max(5, nw * 0.005);
+    ctx.lineWidth = lineW;
+    ctx.font = `bold ${Math.max(24, nw * 0.025)}px Arial`;
+    
+    // 4. Loop through all boxes and draw them onto the image
+    window.multiScanState.boxes.forEach(box => {
         const sx = nw * box.rect.leftPct;
         const sy = nh * box.rect.topPct;
         const sw = nw * box.rect.widthPct;
         const sh = nh * box.rect.heightPct;
 
-        const canvas = document.createElement('canvas');
-        canvas.width = sw + (PADDING * 2);
-        canvas.height = sh + (PADDING * 2);
-        const ctx = canvas.getContext('2d');
+        // Draw Green Box Border
+        ctx.strokeStyle = '#00e676'; 
+        ctx.strokeRect(sx, sy, sw, sh);
         
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.filter = 'contrast(1.2)';
-        ctx.drawImage(window.multiScanState.imageObj, sx, sy, sw, sh, PADDING, PADDING, sw, sh);
+        // Draw Semi-Transparent Green Fill
+        ctx.fillStyle = 'rgba(0, 230, 118, 0.2)';
+        ctx.fillRect(sx, sy, sw, sh);
 
-        const base64Image = canvas.toDataURL('image/jpeg', 1.0);
+        // Draw Label Background Strip (above the box)
+        const textWidth = ctx.measureText(box.display).width;
+        ctx.fillStyle = '#00e676';
+        ctx.fillRect(sx, sy - (lineW * 6), textWidth + 20, lineW * 6);
 
+        // Draw Label Text
+        ctx.fillStyle = '#000000';
+        ctx.textBaseline = "bottom";
+        ctx.fillText(box.display, sx + 10, sy - 5);
+    });
+
+    // 5. Convert the finished canvas to a JPEG
+    const base64Image = canvas.toDataURL('image/jpeg', 0.85); // 0.85 compression to keep file size reasonable
+
+    // 6. Send the single image to Google Apps Script
+    try {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'saveImageOnly',
+                image: base64Image,
+                assetName: window.multiScanState.assetName
+            })
+        });
+        
+        const textResponse = await response.text(); 
         try {
-            const response = await fetch(GOOGLE_SCRIPT_URL, {
-                method: 'POST',
-                body: JSON.stringify({ 
-                    action: 'saveImageOnly',
-                    image: base64Image,
-                    assetName: window.multiScanState.assetName,
-                    attributeName: box.display 
-                })
-            });
-            
-            // Grab raw text first in case it's not JSON
-            const textResponse = await response.text(); 
-            
-            try {
-                const result = JSON.parse(textResponse);
-                return { success: result.success, error: result.error, box: box };
-            } catch (parseErr) {
-                return { success: false, error: "Google Server Error: " + textResponse.substring(0, 100), box: box };
+            const result = JSON.parse(textResponse);
+            if (result.success) {
+                alert("Successfully saved marked-up photo to your Google Drive!");
+                clearMultiBoxes();
+            } else {
+                alert("Backend Error: " + result.error);
             }
-        } catch(err) {
-            return { success: false, error: err.message, box: box };
+        } catch (parseErr) {
+            alert("Google Server Error: " + textResponse.substring(0, 150));
         }
-    });
-
-    const results = await Promise.all(fetchPromises);
-    
-    let successCount = 0;
-    let errorMessages = [];
-    
-    results.forEach(res => {
-        if (res.success) {
-            successCount++;
-        } else {
-            errorMessages.push(`${res.box.display}: ${res.error}`);
-        }
-    });
-    
-    status.innerText = `Saved ${successCount} photos.`;
-    
-    // Display the results and exactly what went wrong
-    if (errorMessages.length > 0) {
-        alert(`Saved ${successCount} photos.\n\nErrors encountered:\n` + errorMessages.join('\n'));
-    } else {
-        alert(`Successfully saved ${successCount} photos to your Google Drive!`);
+    } catch(err) {
+        alert("Network Error: " + err.message);
     }
     
+    status.innerText = "";
     btn.disabled = false;
     ocrBtn.disabled = false;
-    if (successCount > 0) clearMultiBoxes();
 }
 
 function selectMultiAttribute(key, display) {

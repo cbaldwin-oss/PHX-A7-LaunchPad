@@ -2688,9 +2688,9 @@ async function saveMultiCropPhotosOnly() {
     ctx.drawImage(img, 0, 0, nw, nh);
 
     // --- THE TEXT SIZE FIX ---
-    // Reduced the multiplier to make the lines slightly thinner and the font much smaller
+    // Reduced the font size multiplier from 0.012 to 0.008 for much smaller text
     const lineW = Math.max(3, nw * 0.003); 
-    const fontSize = Math.max(14, nw * 0.012); 
+    const fontSize = Math.max(12, nw * 0.008); 
     
     ctx.lineWidth = lineW;
     ctx.font = `bold ${fontSize}px Arial`;
@@ -2707,22 +2707,34 @@ async function saveMultiCropPhotosOnly() {
         ctx.fillStyle = 'rgba(0, 230, 118, 0.2)';
         ctx.fillRect(sx, sy, sw, sh);
 
-        // Draw Label Background Strip (Scaled down to tightly fit the smaller text)
+        // Calculate Label Dimensions
         const textWidth = ctx.measureText(box.display).width;
         const padding = fontSize * 0.4;
+        const labelHeight = fontSize + (padding * 2);
+        const labelWidth = textWidth + (padding * 2);
+
+        // --- THE CUT-OFF FIX ---
+        // Start by assuming the label goes immediately above the box
+        let labelTopY = sy - labelHeight;
+        
+        // If the label would go off the top edge of the image (less than 0),
+        // force it to draw INSIDE the box, anchored to the top edge.
+        if (labelTopY < 0) {
+            labelTopY = sy;
+        }
+
+        // Draw Label Background Strip
         ctx.fillStyle = '#00e676';
-        ctx.fillRect(sx, sy - fontSize - (padding * 2), textWidth + (padding * 2), fontSize + (padding * 2));
+        ctx.fillRect(sx, labelTopY, labelWidth, labelHeight);
 
         // Draw Label Text
         ctx.fillStyle = '#000000';
-        ctx.textBaseline = "bottom";
-        ctx.fillText(box.display, sx + padding, sy - padding);
+        ctx.textBaseline = "top"; // Using 'top' makes the math much cleaner for bounds checking
+        ctx.fillText(box.display, sx + padding, labelTopY + padding);
     });
 
     const base64Image = canvas.toDataURL('image/jpeg', 0.85); 
 
-    // --- THE FILENAME FIX ---
-    // Get the unique names of the boxes drawn (e.g., "General", "Model") and join them
     const uniqueAttributes = [...new Set(window.multiScanState.boxes.map(b => b.display))].slice(0, 3).join('_');
     const filePrefix = uniqueAttributes || 'Scan';
 
@@ -2733,7 +2745,7 @@ async function saveMultiCropPhotosOnly() {
                 action: 'saveImageOnly',
                 image: base64Image,
                 assetName: window.multiScanState.assetName,
-                scanType: filePrefix // 🟢 Sends "General" to the backend for the filename
+                scanType: filePrefix 
             })
         });
         

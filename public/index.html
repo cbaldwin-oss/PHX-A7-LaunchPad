@@ -2153,17 +2153,20 @@ function displayAssetDetails(assetObj, assetName) {
         groups[gName].forEach(attr => {
             const item = document.createElement('div');
             const rawValue = String(attr.value || "").trim();
-            const isTBD = rawValue.toUpperCase() === 'TBD';
-            const safeKey = attr.originalKey.replace(/'/g, "\\'");
-            const safeGName = gName.replace(/"/g, '&quot;');
             
+            // Treat empty strings and "TBD" as missing/red
+            const isTBD = rawValue.toUpperCase() === 'TBD' || rawValue === '';
+            const safeKey = attr.originalKey.replace(/'/g, "\\'");
+            const safeGName = gName.replace(/"/g, '"');
+            
+            // Added CSS transitions so the colors fade smoothly
             item.style.cssText = isTBD 
-                ? "background: #ffebee; padding: 10px 15px; border-radius: 6px; border: 1px solid #d32f2f; display: flex; flex-direction: column;"
-                : "background: #f9f9f9; padding: 10px 15px; border-radius: 6px; border: 1px solid #eee; display: flex; flex-direction: column;";
+                ? "background: #ffebee; padding: 10px 15px; border-radius: 6px; border: 1px solid #d32f2f; display: flex; flex-direction: column; transition: all 0.3s;"
+                : "background: #f9f9f9; padding: 10px 15px; border-radius: 6px; border: 1px solid #eee; display: flex; flex-direction: column; transition: all 0.3s;";
             
             const valueStyle = isTBD 
-                ? "font-size: 14px; color: #d32f2f; font-weight: 800; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #d32f2f;" 
-                : "font-size: 14px; color: #111; font-weight: 500; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #ccc;";
+                ? "font-size: 14px; color: #d32f2f; font-weight: 800; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #d32f2f; transition: all 0.3s;" 
+                : "font-size: 14px; color: #111; font-weight: 500; border: none; background: transparent; outline: none; width: 100%; border-bottom: 1px dashed #ccc; transition: all 0.3s;";
             
             item.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
@@ -2173,13 +2176,43 @@ function displayAssetDetails(assetObj, assetName) {
             `;
             
             const inputField = item.querySelector('input');
-            inputField.addEventListener('input', () => document.getElementById('attr-save-btn').style.display = 'block');
-            inputField.addEventListener('focus', () => { inputField.style.borderBottomStyle = 'solid'; inputField.style.borderBottomColor = '#2e7d32'; });
-            inputField.addEventListener('blur', () => { inputField.style.borderBottomStyle = 'dashed'; inputField.style.borderBottomColor = isTBD ? '#d32f2f' : '#ccc'; });
+            
+            // --- THE FIX: DYNAMIC COLOR CHANGING ---
+            inputField.addEventListener('input', () => {
+                document.getElementById('attr-save-btn').style.display = 'block';
+                
+                const currentVal = inputField.value.trim().toUpperCase();
+                const currentlyTBD = currentVal === 'TBD' || currentVal === '';
+                
+                if (currentlyTBD) {
+                    item.style.background = '#ffebee';
+                    item.style.borderColor = '#d32f2f';
+                    inputField.style.color = '#d32f2f';
+                    inputField.style.fontWeight = '800';
+                    if (document.activeElement !== inputField) inputField.style.borderBottomColor = '#d32f2f';
+                } else {
+                    item.style.background = '#f9f9f9';
+                    item.style.borderColor = '#eee';
+                    inputField.style.color = '#111';
+                    inputField.style.fontWeight = '500';
+                    if (document.activeElement !== inputField) inputField.style.borderBottomColor = '#ccc';
+                }
+            });
+            
+            inputField.addEventListener('focus', () => { 
+                inputField.style.borderBottomStyle = 'solid'; 
+                inputField.style.borderBottomColor = '#2e7d32'; 
+            });
+            
+            inputField.addEventListener('blur', () => { 
+                const currentlyTBD = inputField.value.trim().toUpperCase() === 'TBD' || inputField.value.trim() === '';
+                inputField.style.borderBottomStyle = 'dashed'; 
+                inputField.style.borderBottomColor = currentlyTBD ? '#d32f2f' : '#ccc'; 
+            });
             
             groupGrid.appendChild(item);
         });
-        
+
         section.appendChild(groupGrid);
         container.appendChild(section);
     });
@@ -2842,130 +2875,135 @@ async function processMultiCropAndRead() {
     const nh = img.naturalHeight;
     const PADDING = 60;
     
-    status.innerText = `Saving photo and processing ${window.multiScanState.boxes.length} boxes...`;
+    status.innerText = `Saving full photo to Drive...`;
 
-    // --- 1. FIRE OFF THE FULL IMAGE SAVE (RUNS IN BACKGROUND) ---
-    const saveImagePromise = (async () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = nw;
-        canvas.height = nh;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, nw, nh);
+    // 1. Generate marked-up image canvas
+    const canvasFull = document.createElement('canvas');
+    canvasFull.width = nw;
+    canvasFull.height = nh;
+    const ctxFull = canvasFull.getContext('2d');
+    ctxFull.drawImage(img, 0, 0, nw, nh);
 
-        const lineW = Math.max(3, nw * 0.003); 
-        const fontSize = Math.max(12, nw * 0.008); 
-        ctx.lineWidth = lineW;
-        ctx.font = `bold ${fontSize}px Arial`;
+    const lineW = Math.max(3, nw * 0.003); 
+    const fontSize = Math.max(12, nw * 0.008); 
+    ctxFull.lineWidth = lineW;
+    ctxFull.font = `bold ${fontSize}px Arial`;
 
-        const obstacles = [];
-        const boxesData = window.multiScanState.boxes.map(box => ({
-            display: box.display,
-            x: nw * box.rect.leftPct,
-            y: nh * box.rect.topPct,
-            w: nw * box.rect.widthPct,
-            h: nh * box.rect.heightPct
-        }));
+    const obstacles = [];
+    const boxesData = window.multiScanState.boxes.map(box => ({
+        display: box.display,
+        x: nw * box.rect.leftPct, y: nh * box.rect.topPct,
+        w: nw * box.rect.widthPct, h: nh * box.rect.heightPct
+    }));
 
-        // Draw boxes and record obstacles
-        boxesData.forEach(b => {
-            ctx.strokeStyle = '#00e676'; 
-            ctx.strokeRect(b.x, b.y, b.w, b.h);
-            ctx.fillStyle = 'rgba(0, 230, 118, 0.2)';
-            ctx.fillRect(b.x, b.y, b.w, b.h);
-            obstacles.push({ x: b.x, y: b.y, w: b.w, h: b.h });
-        });
+    boxesData.forEach(b => {
+        ctxFull.strokeStyle = '#00e676'; 
+        ctxFull.strokeRect(b.x, b.y, b.w, b.h);
+        ctxFull.fillStyle = 'rgba(0, 230, 118, 0.2)';
+        ctxFull.fillRect(b.x, b.y, b.w, b.h);
+        obstacles.push({ x: b.x, y: b.y, w: b.w, h: b.h });
+    });
 
-        const checkCollision = (rect) => {
-            if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > nw || rect.y + rect.h > nh) return true; 
-            for (let obs of obstacles) {
-                if (rect.x < obs.x + obs.w && rect.x + rect.w > obs.x &&
-                    rect.y < obs.y + obs.h && rect.y + rect.h > obs.y) return true; 
-            }
-            return false;
-        };
-
-        // Draw Labels with Collision Detection
-        boxesData.forEach(b => {
-            const textWidth = ctx.measureText(b.display).width;
-            const padding = fontSize * 0.4;
-            const labelW = textWidth + (padding * 2);
-            const labelH = fontSize + (padding * 2);
-            const gap = lineW + 2; 
-
-            const candidates = [
-                { x: b.x, y: b.y - labelH - gap }, { x: b.x, y: b.y + b.h + gap },   
-                { x: b.x + b.w + gap, y: b.y }, { x: b.x - labelW - gap, y: b.y },
-                { x: b.x + b.w - labelW, y: b.y - labelH - gap }, { x: b.x + b.w - labelW, y: b.y + b.h + gap }    
-            ];
-
-            let chosenPos = null;
-            for (let pos of candidates) {
-                if (!checkCollision({ x: pos.x, y: pos.y, w: labelW, h: labelH })) {
-                    chosenPos = pos; break; 
-                }
-            }
-
-            if (!chosenPos) {
-                let clampedY = b.y - labelH - gap;
-                if (clampedY < 0) clampedY = b.y + b.h + gap; 
-                if (clampedY + labelH > nh) clampedY = Math.max(0, b.y - labelH); 
-                let clampedX = b.x;
-                if (clampedX + labelW > nw) clampedX = nw - labelW;
-                if (clampedX < 0) clampedX = 0;
-                chosenPos = { x: clampedX, y: clampedY };
-            }
-
-            obstacles.push({ x: chosenPos.x, y: chosenPos.y, w: labelW, h: labelH });
-
-            ctx.fillStyle = '#00e676';
-            ctx.fillRect(chosenPos.x, chosenPos.y, labelW, labelH);
-            ctx.fillStyle = '#000000';
-            ctx.textBaseline = "top";
-            ctx.fillText(b.display, chosenPos.x + padding, chosenPos.y + padding);
-        });
-
-        const base64Image = canvas.toDataURL('image/jpeg', 0.85); 
-        const uniqueAttributes = [...new Set(window.multiScanState.boxes.map(b => b.display))].slice(0, 3).join('_');
-        const filePrefix = uniqueAttributes || 'Scan';
-
-        try {
-            await fetch(GOOGLE_SCRIPT_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'saveImageOnly', image: base64Image, assetName: window.multiScanState.assetName, scanType: filePrefix })
-            });
-            console.log("Full marked-up image saved to Drive.");
-        } catch (err) {
-            console.error("Failed to save full image:", err);
+    const checkCollision = (rect) => {
+        if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > nw || rect.y + rect.h > nh) return true; 
+        for (let obs of obstacles) {
+            if (rect.x < obs.x + obs.w && rect.x + rect.w > obs.x && rect.y < obs.y + obs.h && rect.y + rect.h > obs.y) return true; 
         }
-    })(); // Execute the async function immediately
+        return false;
+    };
 
-    // --- 2. FIRE OFF OCR REQUESTS FOR EACH INDIVIDUAL BOX ---
+    boxesData.forEach(b => {
+        const textWidth = ctxFull.measureText(b.display).width;
+        const padding = fontSize * 0.4;
+        const labelW = textWidth + (padding * 2);
+        const labelH = fontSize + (padding * 2);
+        const gap = lineW + 2; 
+
+        const candidates = [
+            { x: b.x, y: b.y - labelH - gap }, { x: b.x, y: b.y + b.h + gap },   
+            { x: b.x + b.w + gap, y: b.y }, { x: b.x - labelW - gap, y: b.y },
+            { x: b.x + b.w - labelW, y: b.y - labelH - gap }, { x: b.x + b.w - labelW, y: b.y + b.h + gap }    
+        ];
+
+        let chosenPos = null;
+        for (let pos of candidates) {
+            if (!checkCollision({ x: pos.x, y: pos.y, w: labelW, h: labelH })) { chosenPos = pos; break; }
+        }
+
+        if (!chosenPos) {
+            let clampedY = b.y - labelH - gap;
+            if (clampedY < 0) clampedY = b.y + b.h + gap; 
+            if (clampedY + labelH > nh) clampedY = Math.max(0, b.y - labelH); 
+            let clampedX = b.x;
+            if (clampedX + labelW > nw) clampedX = nw - labelW;
+            if (clampedX < 0) clampedX = 0;
+            chosenPos = { x: clampedX, y: clampedY };
+        }
+
+        obstacles.push({ x: chosenPos.x, y: chosenPos.y, w: labelW, h: labelH });
+
+        ctxFull.fillStyle = '#00e676';
+        ctxFull.fillRect(chosenPos.x, chosenPos.y, labelW, labelH);
+        ctxFull.fillStyle = '#000000';
+        ctxFull.textBaseline = "top";
+        ctxFull.fillText(b.display, chosenPos.x + padding, chosenPos.y + padding);
+    });
+
+    const base64Image = canvasFull.toDataURL('image/jpeg', 0.85); 
+    const uniqueAttributes = [...new Set(window.multiScanState.boxes.map(b => b.display))].slice(0, 3).join('_');
+    const filePrefix = uniqueAttributes || 'Scan';
+
+    let savedPhotoName = "Failed_To_Save_Image";
+
+    // 2. WAIT FOR THE IMAGE TO SAVE TO DRIVE FIRST
+    try {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'saveImageOnly', 
+                image: base64Image, 
+                assetName: window.multiScanState.assetName, 
+                scanType: filePrefix 
+            })
+        });
+        const result = await response.json();
+        if (result.success) {
+            savedPhotoName = result.fileName; // 🟢 We successfully got the filename!
+        }
+    } catch (err) {
+        console.error("Failed to save full image:", err);
+    }
+
+    status.innerText = `Processing ${window.multiScanState.boxes.length} boxes...`;
+
+    // 3. FIRE OFF OCR FOR EACH BOX, PASSING THE FILENAME TO SUPABASE
     const fetchPromises = window.multiScanState.boxes.map(async (box) => {
         const sx = nw * box.rect.leftPct;
         const sy = nh * box.rect.topPct;
         const sw = nw * box.rect.widthPct;
         const sh = nh * box.rect.heightPct;
 
-        const canvas = document.createElement('canvas');
-        canvas.width = sw + (PADDING * 2);
-        canvas.height = sh + (PADDING * 2);
-        const ctx = canvas.getContext('2d');
+        const canvasBox = document.createElement('canvas');
+        canvasBox.width = sw + (PADDING * 2);
+        canvasBox.height = sh + (PADDING * 2);
+        const ctxBox = canvasBox.getContext('2d');
         
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.filter = 'contrast(1.2)';
-        ctx.drawImage(img, sx, sy, sw, sh, PADDING, PADDING, sw, sh);
+        ctxBox.fillStyle = '#ffffff';
+        ctxBox.fillRect(0, 0, canvasBox.width, canvasBox.height);
+        ctxBox.filter = 'contrast(1.2)';
+        ctxBox.drawImage(img, sx, sy, sw, sh, PADDING, PADDING, sw, sh);
 
-        const base64Image = canvas.toDataURL('image/jpeg', 1.0);
+        const croppedBase64 = canvasBox.toDataURL('image/jpeg', 1.0);
 
         try {
             const response = await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 body: JSON.stringify({ 
                     action: 'ocrImage', 
-                    image: base64Image,
+                    image: croppedBase64,
                     assetName: window.multiScanState.assetName, 
-                    attributeName: box.display                  
+                    attributeName: box.display,
+                    photoName: savedPhotoName // 🟢 Send the master filename!
                 })
             });
             const result = await response.json();
@@ -2981,16 +3019,11 @@ async function processMultiCropAndRead() {
         }
     });
 
-    // Add the saveImagePromise to the array so we wait for BOTH the Drive Upload and the OCR processing
-    fetchPromises.push(saveImagePromise);
-
-    // Wait for ALL network requests to finish at the exact same time
     const results = await Promise.all(fetchPromises);
     
     let successCount = 0;
-    // Iterate results (ignoring the undefined return from saveImagePromise)
     results.forEach(res => {
-        if (res && res.success && res.box) {
+        if (res.success) {
             const inputField = document.querySelector(`input[data-key="${res.box.key}"]`);
             if (inputField) {
                 injectDataIntoInput(inputField, res.text);
@@ -3010,19 +3043,18 @@ function injectDataIntoInput(inputField, value) {
     inputField.value = value;
     
     const parentBox = inputField.parentElement;
-    const originalBg = parentBox.style.background;
-    parentBox.style.background = '#e3f2fd'; 
-    setTimeout(() => { parentBox.style.background = originalBg; }, 600);
     
+    // Flash blue to show data was received
+    parentBox.style.background = '#e3f2fd'; 
+    
+    // Trigger the input event to automatically update fonts/borders
     inputField.dispatchEvent(new Event('input')); 
-}
-function filterAssetDirectory() {
-    const term = document.getElementById('attr-search').value.toLowerCase();
-    const filtered = cachedAttributesData.filter(obj => {
-        const name = obj['Asset Name'] || obj['Asset'] || "";
-        return name.toLowerCase().includes(term);
-    });
-    renderAssetDirectory(filtered);
+    
+    setTimeout(() => { 
+        // Fade to the correct logical background color
+        const currentVal = inputField.value.trim().toUpperCase();
+        parentBox.style.background = (currentVal === 'TBD' || currentVal === '') ? '#ffebee' : '#f9f9f9'; 
+    }, 600);
 }
 
 let currentPlaceFilter = 'All';

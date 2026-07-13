@@ -2653,167 +2653,12 @@ function renderMultiCropperUI(img) {
         
         <div style="display:flex; gap:10px; margin-top:12px; flex-shrink: 0; flex-wrap: wrap;">
             <button onclick="clearMultiBoxes()" style="flex:1; padding: 12px; background: #f44336; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px;">Clear</button>
-            <button id="save-photos-btn" onclick="saveMultiCropPhotosOnly()" style="flex:1.5; padding: 12px; background: #1976d2; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px;">💾 Save Photos</button>
             <button id="ocr-process-btn" onclick="processMultiCropAndRead()" style="flex:2; padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px;">✅ Process <span id="box-count-badge">0</span></button>
         </div>
         <p id="ocr-status-text" style="text-align:center; color:#666; font-size:12px; margin-top:6px; margin-bottom:0; flex-shrink: 0; min-height: 15px;"></p>
     `;
 
     setupMultiDrawing();
-}
-
-async function saveMultiCropPhotosOnly() {
-    if (window.multiScanState.boxes.length === 0) {
-        alert("Please draw at least one box to save.");
-        return;
-    }
-
-    const btn = document.getElementById('save-photos-btn');
-    const status = document.getElementById('ocr-status-text');
-    const ocrBtn = document.getElementById('ocr-process-btn');
-    
-    btn.disabled = true;
-    ocrBtn.disabled = true;
-    status.innerText = "Saving marked-up photo to Drive...";
-
-    const img = window.multiScanState.imageObj;
-    const nw = img.naturalWidth;
-    const nh = img.naturalHeight;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = nw;
-    canvas.height = nh;
-    const ctx = canvas.getContext('2d');
-    
-    ctx.drawImage(img, 0, 0, nw, nh);
-
-    const lineW = Math.max(3, nw * 0.003); 
-    const fontSize = Math.max(12, nw * 0.008); 
-    
-    ctx.lineWidth = lineW;
-    ctx.font = `bold ${fontSize}px Arial`;
-    
-    // 1. Gather all boxes as "obstacles" in pixel coordinates
-    const obstacles = [];
-    const boxesData = window.multiScanState.boxes.map(box => {
-        return {
-            display: box.display,
-            x: nw * box.rect.leftPct,
-            y: nh * box.rect.topPct,
-            w: nw * box.rect.widthPct,
-            h: nh * box.rect.heightPct
-        };
-    });
-
-    // 2. Draw the transparent boxes first, and add them to the obstacle list
-    boxesData.forEach(b => {
-        ctx.strokeStyle = '#00e676'; 
-        ctx.strokeRect(b.x, b.y, b.w, b.h);
-        ctx.fillStyle = 'rgba(0, 230, 118, 0.2)';
-        ctx.fillRect(b.x, b.y, b.w, b.h);
-        
-        obstacles.push({ x: b.x, y: b.y, w: b.w, h: b.h });
-    });
-
-    // Collision Helper: Checks if a rectangle overlaps with any obstacles or hits the edges
-    const checkCollision = (rect) => {
-        if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > nw || rect.y + rect.h > nh) return true; 
-        for (let obs of obstacles) {
-            if (rect.x < obs.x + obs.w && rect.x + rect.w > obs.x &&
-                rect.y < obs.y + obs.h && rect.y + rect.h > obs.y) {
-                return true; 
-            }
-        }
-        return false;
-    };
-
-    // 3. Calculate label positions using the Collision Engine
-    boxesData.forEach(b => {
-        const textWidth = ctx.measureText(b.display).width;
-        const padding = fontSize * 0.4;
-        const labelW = textWidth + (padding * 2);
-        const labelH = fontSize + (padding * 2);
-        const gap = lineW + 2; // Small gap between the box and the label
-
-        // Test these positions in order of preference
-        const candidates = [
-            { x: b.x, y: b.y - labelH - gap }, // 1. Top Left
-            { x: b.x, y: b.y + b.h + gap },    // 2. Bottom Left
-            { x: b.x + b.w + gap, y: b.y },    // 3. Right Top
-            { x: b.x - labelW - gap, y: b.y }, // 4. Left Top
-            { x: b.x + b.w - labelW, y: b.y - labelH - gap }, // 5. Top Right
-            { x: b.x + b.w - labelW, y: b.y + b.h + gap }     // 6. Bottom Right
-        ];
-
-        let chosenPos = null;
-        for (let pos of candidates) {
-            if (!checkCollision({ x: pos.x, y: pos.y, w: labelW, h: labelH })) {
-                chosenPos = pos;
-                break; // Found a safe spot!
-            }
-        }
-
-        // Desperate Fallback: If the screen is completely crowded, force it to the best available edge
-        if (!chosenPos) {
-            let clampedY = b.y - labelH - gap;
-            if (clampedY < 0) clampedY = b.y + b.h + gap; 
-            if (clampedY + labelH > nh) clampedY = Math.max(0, b.y - labelH); 
-            
-            let clampedX = b.x;
-            if (clampedX + labelW > nw) clampedX = nw - labelW;
-            if (clampedX < 0) clampedX = 0;
-
-            chosenPos = { x: clampedX, y: clampedY };
-        }
-
-        // Add the newly placed label to the obstacle list so the next labels avoid it!
-        obstacles.push({ x: chosenPos.x, y: chosenPos.y, w: labelW, h: labelH });
-
-        // Draw Label Background
-        ctx.fillStyle = '#00e676';
-        ctx.fillRect(chosenPos.x, chosenPos.y, labelW, labelH);
-
-        // Draw Label Text
-        ctx.fillStyle = '#000000';
-        ctx.textBaseline = "top";
-        ctx.fillText(b.display, chosenPos.x + padding, chosenPos.y + padding);
-    });
-
-    const base64Image = canvas.toDataURL('image/jpeg', 0.85); 
-
-    const uniqueAttributes = [...new Set(window.multiScanState.boxes.map(b => b.display))].slice(0, 3).join('_');
-    const filePrefix = uniqueAttributes || 'Scan';
-
-    try {
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify({ 
-                action: 'saveImageOnly',
-                image: base64Image,
-                assetName: window.multiScanState.assetName,
-                scanType: filePrefix 
-            })
-        });
-        
-        const textResponse = await response.text(); 
-        try {
-            const result = JSON.parse(textResponse);
-            if (result.success) {
-                alert("Successfully saved marked-up photo to your Google Drive!");
-                clearMultiBoxes();
-            } else {
-                alert("Backend Error: " + result.error);
-            }
-        } catch (parseErr) {
-            alert("Google Server Error: " + textResponse.substring(0, 150));
-        }
-    } catch(err) {
-        alert("Network Error: " + err.message);
-    }
-    
-    status.innerText = "";
-    btn.disabled = false;
-    ocrBtn.disabled = false;
 }
 
 function selectMultiAttribute(key, display) {
@@ -2992,14 +2837,109 @@ async function processMultiCropAndRead() {
     const status = document.getElementById('ocr-status-text');
     btn.disabled = true;
     
-    const imgEl = document.getElementById('crop-img');
-    const nw = imgEl.naturalWidth;
-    const nh = imgEl.naturalHeight;
+    const img = window.multiScanState.imageObj;
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
     const PADDING = 60;
     
-    status.innerText = `Processing all ${window.multiScanState.boxes.length} boxes simultaneously...`;
+    status.innerText = `Saving photo and processing ${window.multiScanState.boxes.length} boxes...`;
 
-    // 🟢 THE FIX: Map all boxes to an array of promises so they run in parallel
+    // --- 1. FIRE OFF THE FULL IMAGE SAVE (RUNS IN BACKGROUND) ---
+    const saveImagePromise = (async () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = nw;
+        canvas.height = nh;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, nw, nh);
+
+        const lineW = Math.max(3, nw * 0.003); 
+        const fontSize = Math.max(12, nw * 0.008); 
+        ctx.lineWidth = lineW;
+        ctx.font = `bold ${fontSize}px Arial`;
+
+        const obstacles = [];
+        const boxesData = window.multiScanState.boxes.map(box => ({
+            display: box.display,
+            x: nw * box.rect.leftPct,
+            y: nh * box.rect.topPct,
+            w: nw * box.rect.widthPct,
+            h: nh * box.rect.heightPct
+        }));
+
+        // Draw boxes and record obstacles
+        boxesData.forEach(b => {
+            ctx.strokeStyle = '#00e676'; 
+            ctx.strokeRect(b.x, b.y, b.w, b.h);
+            ctx.fillStyle = 'rgba(0, 230, 118, 0.2)';
+            ctx.fillRect(b.x, b.y, b.w, b.h);
+            obstacles.push({ x: b.x, y: b.y, w: b.w, h: b.h });
+        });
+
+        const checkCollision = (rect) => {
+            if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > nw || rect.y + rect.h > nh) return true; 
+            for (let obs of obstacles) {
+                if (rect.x < obs.x + obs.w && rect.x + rect.w > obs.x &&
+                    rect.y < obs.y + obs.h && rect.y + rect.h > obs.y) return true; 
+            }
+            return false;
+        };
+
+        // Draw Labels with Collision Detection
+        boxesData.forEach(b => {
+            const textWidth = ctx.measureText(b.display).width;
+            const padding = fontSize * 0.4;
+            const labelW = textWidth + (padding * 2);
+            const labelH = fontSize + (padding * 2);
+            const gap = lineW + 2; 
+
+            const candidates = [
+                { x: b.x, y: b.y - labelH - gap }, { x: b.x, y: b.y + b.h + gap },   
+                { x: b.x + b.w + gap, y: b.y }, { x: b.x - labelW - gap, y: b.y },
+                { x: b.x + b.w - labelW, y: b.y - labelH - gap }, { x: b.x + b.w - labelW, y: b.y + b.h + gap }    
+            ];
+
+            let chosenPos = null;
+            for (let pos of candidates) {
+                if (!checkCollision({ x: pos.x, y: pos.y, w: labelW, h: labelH })) {
+                    chosenPos = pos; break; 
+                }
+            }
+
+            if (!chosenPos) {
+                let clampedY = b.y - labelH - gap;
+                if (clampedY < 0) clampedY = b.y + b.h + gap; 
+                if (clampedY + labelH > nh) clampedY = Math.max(0, b.y - labelH); 
+                let clampedX = b.x;
+                if (clampedX + labelW > nw) clampedX = nw - labelW;
+                if (clampedX < 0) clampedX = 0;
+                chosenPos = { x: clampedX, y: clampedY };
+            }
+
+            obstacles.push({ x: chosenPos.x, y: chosenPos.y, w: labelW, h: labelH });
+
+            ctx.fillStyle = '#00e676';
+            ctx.fillRect(chosenPos.x, chosenPos.y, labelW, labelH);
+            ctx.fillStyle = '#000000';
+            ctx.textBaseline = "top";
+            ctx.fillText(b.display, chosenPos.x + padding, chosenPos.y + padding);
+        });
+
+        const base64Image = canvas.toDataURL('image/jpeg', 0.85); 
+        const uniqueAttributes = [...new Set(window.multiScanState.boxes.map(b => b.display))].slice(0, 3).join('_');
+        const filePrefix = uniqueAttributes || 'Scan';
+
+        try {
+            await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'saveImageOnly', image: base64Image, assetName: window.multiScanState.assetName, scanType: filePrefix })
+            });
+            console.log("Full marked-up image saved to Drive.");
+        } catch (err) {
+            console.error("Failed to save full image:", err);
+        }
+    })(); // Execute the async function immediately
+
+    // --- 2. FIRE OFF OCR REQUESTS FOR EACH INDIVIDUAL BOX ---
     const fetchPromises = window.multiScanState.boxes.map(async (box) => {
         const sx = nw * box.rect.leftPct;
         const sy = nh * box.rect.topPct;
@@ -3014,7 +2954,7 @@ async function processMultiCropAndRead() {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.filter = 'contrast(1.2)';
-        ctx.drawImage(window.multiScanState.imageObj, sx, sy, sw, sh, PADDING, PADDING, sw, sh);
+        ctx.drawImage(img, sx, sy, sw, sh, PADDING, PADDING, sw, sh);
 
         const base64Image = canvas.toDataURL('image/jpeg', 1.0);
 
@@ -3024,8 +2964,8 @@ async function processMultiCropAndRead() {
                 body: JSON.stringify({ 
                     action: 'ocrImage', 
                     image: base64Image,
-                    assetName: window.multiScanState.assetName, // 🟢 Passes the Asset Name for the Folder
-                    attributeName: box.display                  // 🟢 Passes the Attribute Name for the File
+                    assetName: window.multiScanState.assetName, 
+                    attributeName: box.display                  
                 })
             });
             const result = await response.json();
@@ -3041,12 +2981,16 @@ async function processMultiCropAndRead() {
         }
     });
 
-    // Wait for ALL image requests to finish at the exact same time
+    // Add the saveImagePromise to the array so we wait for BOTH the Drive Upload and the OCR processing
+    fetchPromises.push(saveImagePromise);
+
+    // Wait for ALL network requests to finish at the exact same time
     const results = await Promise.all(fetchPromises);
     
     let successCount = 0;
+    // Iterate results (ignoring the undefined return from saveImagePromise)
     results.forEach(res => {
-        if (res.success) {
+        if (res && res.success && res.box) {
             const inputField = document.querySelector(`input[data-key="${res.box.key}"]`);
             if (inputField) {
                 injectDataIntoInput(inputField, res.text);
@@ -3056,7 +3000,7 @@ async function processMultiCropAndRead() {
     });
     
     status.innerText = `Processed ${successCount} values.`;
-    alert(`Extracted ${successCount} values! Please verify them in the grid.`);
+    alert(`Photo saved to Drive and extracted ${successCount} values!\n\nPlease verify them in the grid.`);
     
     stopScanner(); 
     document.getElementById('attr-save-btn').style.display = 'block';

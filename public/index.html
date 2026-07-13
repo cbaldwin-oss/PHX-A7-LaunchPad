@@ -2675,9 +2675,9 @@ function renderMultiCropperUI(img) {
         </div>
         <p id="multi-instruction" style="text-align:center; font-weight:bold; color:#1976d2; margin: 8px 0; flex-shrink: 0; font-size: 13px;">Select an attribute to draw a box.</p>
         
-        <div id="crop-container" style="position:relative; width:100%; flex: 1; min-height: 0; overflow:auto; background: #000; border-radius: 8px;">
-            <div style="position: relative; display: block; width: 100%;">
-                <img id="crop-img" src="${img.src}" style="width:100%; height:auto; display:block; pointer-events:none;">
+        <div id="crop-container" style="position:relative; width:100%; flex: 1; min-height: 0; overflow:auto; background: #000; border-radius: 8px; text-align: center;">
+            <div style="position: relative; display: inline-block; max-width: 100%;">
+                <img id="crop-img" src="${img.src}" class="responsive-crop-img" style="display:block; pointer-events:none; margin: 0 auto;">
                 <div id="boxes-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:4;"></div>
                 <div id="current-box" style="position:absolute; border:2px dashed #ff9800; background:rgba(255,152,0,0.2); display:none; pointer-events:none; z-index:5;"></div>
                 <div id="crop-touch-layer" style="position:absolute; top:0; left:0; right:0; bottom:0; z-index:10; cursor: crosshair;"></div>
@@ -3038,6 +3038,20 @@ async function processMultiCropAndRead() {
     stopScanner(); 
     document.getElementById('attr-save-btn').style.display = 'block';
 }
+
+/* --- DESKTOP CROPPER ZOOM FIX --- */
+    .responsive-crop-img {
+        width: 100%;
+        height: auto;
+    }
+    
+    /* On screens larger than an iPad, constrain the height so it doesn't zoom in */
+    @media (min-width: 1025px) {
+        .responsive-crop-img {
+            width: auto !important;
+            max-height: 65vh !important;
+        }
+    }
 
 function injectDataIntoInput(inputField, value) {
     inputField.value = value;

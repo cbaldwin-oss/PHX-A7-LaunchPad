@@ -3615,8 +3615,9 @@ async function admitUser(email, company, requestId) {
 let presenceChannel;
 
 async function initPresence(userEmail) {
-    // 1. Create the Presence Channel
-    presenceChannel = _supabase.channel('online-users', {
+    // --- THE FIX: Create a site-specific Presence Channel ---
+    // By changing 'online-users' to 'online-users-PHXA7', you isolate this room!
+    presenceChannel = _supabase.channel('online-users-PHXA7', {
         config: { presence: { key: userEmail } }
     });
 

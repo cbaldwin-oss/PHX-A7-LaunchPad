@@ -1436,7 +1436,8 @@ const defaultScheduleConfig = [
     { id: 5, name: 'Status', visible: true },
     { id: 6, name: 'Trade Partners', visible: true },
     { id: 7, name: 'Result', visible: true },
-    { id: 8, name: 'Notes', visible: true }
+    { id: 8, name: 'Notes', visible: true },
+    { id: 9, name: 'Duration', visible: true }
 ];
 
 let scheduleColConfig = defaultScheduleConfig; // Now defaults to global variable
@@ -3718,8 +3719,11 @@ async function loadScheduleConfig() {
         const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getScheduleConfig&t=${new Date().getTime()}`);
         const data = await response.json();
         if (data.status === 'success' && data.data) {
-            // Failsafe in case it was double-stringified in the database
             scheduleColConfig = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
+            // Inject Col 9 automatically if it's missing from their old config
+            if (!scheduleColConfig.find(c => c.id === 9)) {
+                scheduleColConfig.push({ id: 9, name: 'Duration', visible: true });
+            }
         }
     } catch (e) {
         console.error("Failed to load Schedule Config from cloud. Using defaults.", e);
@@ -4502,8 +4506,20 @@ function addRowsToContainer(container, dayLabel, anchorBtn = null, startIdx = 0,
                     if (col === 3 || col === 4) lookupColumn5Value(rowNumericId, dayLabel, false);
                 };
             }
-            else {
+            else if (col === 8) {
                 element = document.createElement('textarea');
+                element.id = cellId;
+                element.setAttribute('data-col-index', col);
+                element.oninput = () => applyCellColor(element, element.value);
+                element.onblur = () => { 
+                    applyCellColor(element, element.value); 
+                    saveCell(element, element.value, col, true);
+                };
+            }
+            else {
+                // Generates a standard Text Input for Col 9 (Duration) and any future columns
+                element = document.createElement('input');
+                element.type = 'text';
                 element.id = cellId;
                 element.setAttribute('data-col-index', col);
                 element.oninput = () => applyCellColor(element, element.value);
@@ -4550,7 +4566,7 @@ async function saveReorderedDay(container, dayLabel) {
             checked: cb ? cb.checked : false,
             cols: {} 
         };
-        for (let col = 1; col <= 8; col++) {
+        for (let col = 1; col <= 9; col++) {
             const el = row.querySelector(`[data-col-index="${col}"]`);
             let val = ""; let html = "";
             if (el) {
@@ -4591,7 +4607,7 @@ async function saveReorderedDay(container, dayLabel) {
             else selectedRowIds.delete(targetRow.id);
         }
         
-        for (let col = 1; col <= 8; col++) {
+        for (let col = 1; col <= 9; col++) {
             const targetEl = targetRow.querySelector(`[data-col-index="${col}"]`);
             if (!targetEl) continue;
             
@@ -5136,6 +5152,7 @@ async function confirmBulkAction() {
             col6: rowDiv.querySelector(`[data-col-index="6"]`)?.getAttribute('data-selected') || "",
             col7: rowDiv.querySelector(`[data-col-index="7"]`)?.value || "",
             col8: rowDiv.querySelector(`[data-col-index="8"]`)?.value || ""
+            col9: rowDiv.querySelector(`[data-col-index="9"]`)?.value || ""
         };
         rowsToProcess.push({ data: rowData, rowDiv });
     }
@@ -5162,7 +5179,7 @@ async function confirmBulkAction() {
         // Grab the ID of this specific row to trigger the lookup
         const rowNum = parseInt(emptyRow.id.replace('row-wrapper-', ''));
 
-        for (let col = 1; col <= 8; col++) {
+        for (let col = 1; col <= 9; col++) {
             const el = emptyRow.querySelector(`[data-col-index="${col}"]`);
             if (!el) continue;
             
@@ -5273,25 +5290,38 @@ async function lookupColumn5Value(rowNum, dayLabel, isBackground = false) {
         const data = await response.json();
 
         if (data && data.result) {
-            // Check against innerText so HTML tags don't trigger false changes.
             if (data.result !== col5.innerText || (data.url && !col5.innerHTML.includes('target="_blank"'))) {
                 
-                // If the backend found a URL, wrap the text in an anchor tag that opens in a NEW TAB
                 if (data.url) {
                     col5.innerHTML = `<a href="${data.url}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline; font-weight: bold;">${data.result}</a>`;
                 } else {
                     col5.innerText = data.result;
                 }
-                
                 saveCell(col5, data.result, 5, true);
             }
-            
-            // --- THE FIX: ALWAYS re-evaluate the color, even if the text string stayed the same! ---
             applyCellColor(col5, data.result);
+            
+            // --- NEW: Automatically populate Duration ---
+            const col9 = document.getElementById(`${dayLabel}-r${rowNum}-c9`);
+            if (col9 && data.duration !== undefined) {
+                if (col9.value !== data.duration) {
+                    col9.value = data.duration;
+                    applyCellColor(col9, data.duration);
+                    saveCell(col9, data.duration, 9, true);
+                }
+            }
             
         } else if (!isBackground) {
             col5.innerText = "NA";
             applyCellColor(col5, "NA");
+            
+            // Clear duration if nothing is found
+            const col9 = document.getElementById(`${dayLabel}-r${rowNum}-c9`);
+            if (col9) {
+                col9.value = "";
+                applyCellColor(col9, "");
+                saveCell(col9, "", 9, true);
+            }
         }
     } catch (e) {
         console.error("VLOOKUP Pull Error:", e);
@@ -5319,7 +5349,8 @@ async function saveRow(rowNum, dayLabel, col6Override = null) {
         col5: document.getElementById(`${dayLabel}-r${rowNum}-c5`)?.innerHTML || "", // <-- CHANGED TO innerHTML
         col6: col6Override !== null ? col6Override : (document.getElementById(`${dayLabel}-r${rowNum}-c6`)?.getAttribute('data-selected') || ""),
         col7: document.getElementById(`${dayLabel}-r${rowNum}-c7`)?.value || "",
-        col8: document.getElementById(`${dayLabel}-r${rowNum}-c8`)?.value || ""
+        col8: document.getElementById(`${dayLabel}-r${rowNum}-c8`)?.value || "",
+        col9: col6Override !== null ? col6Override : (document.getElementById(`${dayLabel}-r${rowNum}-c9`)?.value || "")
     };
 
     try {
@@ -5660,7 +5691,7 @@ async function loadData(isSilent = false) {
                     wrapper.setAttribute('data-occupied', 'true');
                 }
 
-                for (let col = 1; col <= 8; col++) {
+                for (let col = 1; col <= 9; col++) {
                     const cellId = `${row.day_label}-r${row.id}-c${col}`;
                     const el = document.getElementById(cellId);
                     if (el && el !== document.activeElement) {
@@ -5768,7 +5799,7 @@ function exportToPDF() {
             const rowDate = row.getAttribute('data-date') || "";
             const cols = [];
             
-            for (let col = 1; col <= 8; col++) {
+            for (let col = 1; col <= 9; col++) {
                 const el = row.querySelector(`[data-col-index="${col}"]`) || row.querySelector(`[id$="-c${col}"]`);
                 let val = "";
                 
@@ -5916,7 +5947,7 @@ async function orderChronologically() {
         // 1. Scrape the data from the current rows
         const rowDataList = occupiedRows.map(row => {
             const rowData = { timeStr: "", cols: {} };
-            for (let col = 1; col <= 8; col++) {
+            for (let col = 1; col <= 9; col++) {
                 const el = row.querySelector(`[data-col-index="${col}"]`);
                 let val = "";
                 let html = ""; // Capture HTML for the hyperlink
@@ -5946,7 +5977,7 @@ async function orderChronologically() {
             const targetRow = occupiedRows[i];
             const sourceData = rowDataList[i];
             
-            for (let col = 1; col <= 8; col++) {
+            for (let col = 1; col <= 9; col++) {
                 const targetEl = targetRow.querySelector(`[data-col-index="${col}"]`);
                 if (!targetEl) continue;
                 

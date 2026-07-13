@@ -1019,6 +1019,19 @@ html, body {
     display: flex;
     flex-direction: column;
 }
+/* --- DESKTOP CROPPER ZOOM FIX --- */
+    .responsive-crop-img {
+        width: 100%;
+        height: auto;
+    }
+    
+    /* On screens larger than an iPad, constrain the height so it doesn't zoom in */
+    @media (min-width: 1025px) {
+        .responsive-crop-img {
+            width: auto !important;
+            max-height: 65vh !important;
+        }
+    }
 </style>
 </head>
 <body>
@@ -3038,20 +3051,6 @@ async function processMultiCropAndRead() {
     stopScanner(); 
     document.getElementById('attr-save-btn').style.display = 'block';
 }
-
-/* --- DESKTOP CROPPER ZOOM FIX --- */
-    .responsive-crop-img {
-        width: 100%;
-        height: auto;
-    }
-    
-    /* On screens larger than an iPad, constrain the height so it doesn't zoom in */
-    @media (min-width: 1025px) {
-        .responsive-crop-img {
-            width: auto !important;
-            max-height: 65vh !important;
-        }
-    }
 
 function injectDataIntoInput(inputField, value) {
     inputField.value = value;

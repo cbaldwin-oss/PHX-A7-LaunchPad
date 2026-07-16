@@ -1574,11 +1574,21 @@ async function loadScheduleConfig() {
         const data = await response.json();
         if (data.status === 'success' && data.data) {
             scheduleColConfig = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
+            
             if (!scheduleColConfig.find(c => c.id === 9)) {
                 scheduleColConfig.push({ id: 9, name: 'Duration', visible: true, width: 5 });
             }
             
-            // Auto-Normalize: If old config has pixel values (e.g. > 100 sum), recalculate them into percentages
+            // 🟢 THE FIX: Guarantee every column has a valid width number!
+            // If your database has an old config without widths, this fixes it instantly.
+            scheduleColConfig.forEach(col => {
+                if (!col.width || isNaN(col.width)) {
+                    const def = defaultScheduleConfig.find(d => d.id === col.id);
+                    col.width = def ? def.width : 10;
+                }
+            });
+            
+            // Auto-Normalize: If the old config had pixel values (e.g. > 100 sum), recalculate them into percentages
             let totalWidth = scheduleColConfig.reduce((acc, col) => acc + (col.width || 0), 0);
             if (totalWidth > 105) {
                 scheduleColConfig.forEach(col => { col.width = ((col.width / totalWidth) * 100); });

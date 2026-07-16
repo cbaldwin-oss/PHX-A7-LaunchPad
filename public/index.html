@@ -4726,11 +4726,15 @@ function initColumnResizers() {
     const resizers = document.querySelectorAll('.col-resizer');
     let startX, startWidth1, startWidth2, col1, col2, activeResizer, flexGridWidth;
     
-    // 🟢 THE FIX: Helper function to grab coordinates from BOTH mice and touch screens
+    // Helper function to grab coordinates from BOTH mice and touch screens
     const getPageX = (e) => e.touches ? e.touches[0].pageX : e.pageX;
 
     const onStart = (e) => {
         if (!document.body.classList.contains('layout-edit-mode')) return;
+        
+        // 🟢 THE FIX: Instantly block the browser from trying to highlight text or natively drag elements!
+        if (e.type === 'mousedown') e.preventDefault(); 
+        e.stopPropagation(); // Prevents other elements from stealing the click
         
         activeResizer = e.target;
         activeResizer.classList.add('active-drag');
@@ -4770,6 +4774,7 @@ function initColumnResizers() {
         
         // Prevent the iPad/browser screen from scrolling while you drag the column
         if (e.cancelable) e.preventDefault(); 
+        e.stopPropagation();
         
         const currentX = getPageX(e);
         const deltaX = currentX - startX;
@@ -4779,6 +4784,7 @@ function initColumnResizers() {
         const newWidth1 = startWidth1 + deltaPct;
         const newWidth2 = startWidth2 - deltaPct;
         
+        // Ensure columns don't crush each other into negative space (min 2%)
         if (newWidth1 > 2 && newWidth2 > 2) {
             col1.width = newWidth1;
             col2.width = newWidth2;

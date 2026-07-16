@@ -1428,16 +1428,17 @@ html, body {
 
 <script>
 
+// 🟢 THE FIX: Widths are now percentages that perfectly equal 100%
 const defaultScheduleConfig = [
-    { id: 1, name: 'Time', visible: true },
-    { id: 2, name: 'Place', visible: true },
-    { id: 3, name: 'Activity', visible: true },
-    { id: 4, name: 'Asset', visible: true },
-    { id: 5, name: 'Status', visible: true },
-    { id: 6, name: 'Trade Partners', visible: true },
-    { id: 7, name: 'Result', visible: true },
-    { id: 8, name: 'Notes', visible: true },
-    { id: 9, name: 'Duration', visible: true }
+    { id: 1, name: 'Time', visible: true, width: 10 },
+    { id: 2, name: 'Place', visible: true, width: 10 },
+    { id: 3, name: 'Activity', visible: true, width: 15 },
+    { id: 4, name: 'Asset', visible: true, width: 15 },
+    { id: 5, name: 'Status', visible: true, width: 10 },
+    { id: 6, name: 'Trade Partners', visible: true, width: 15 },
+    { id: 7, name: 'Result', visible: true, width: 10 },
+    { id: 8, name: 'Notes', visible: true, width: 10 },
+    { id: 9, name: 'Duration', visible: true, width: 5 }
 ];
 
 let scheduleColConfig = defaultScheduleConfig; // Now defaults to global variable
@@ -3712,23 +3713,25 @@ async function verifyPermission(email) {
     return { isAuthorized: true, isAdmin: data.is_admin, company: data.company };
 }
 
-// --- NEW: Fetch config from Google Sheets on load (WITH CACHE BUSTER) ---
 async function loadScheduleConfig() {
     try {
-        // Appending a timestamp forces the browser to bypass its cache and fetch fresh data
         const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getScheduleConfig&t=${new Date().getTime()}`);
         const data = await response.json();
         if (data.status === 'success' && data.data) {
             scheduleColConfig = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
-            // Inject Col 9 automatically if it's missing from their old config
             if (!scheduleColConfig.find(c => c.id === 9)) {
-                scheduleColConfig.push({ id: 9, name: 'Duration', visible: true });
+                scheduleColConfig.push({ id: 9, name: 'Duration', visible: true, width: 5 });
+            }
+            
+            // Auto-Normalize: If old config has pixel values (e.g. > 100 sum), recalculate them into percentages
+            let totalWidth = scheduleColConfig.reduce((acc, col) => acc + (col.width || 0), 0);
+            if (totalWidth > 105) {
+                scheduleColConfig.forEach(col => { col.width = ((col.width / totalWidth) * 100); });
             }
         }
     } catch (e) {
         console.error("Failed to load Schedule Config from cloud. Using defaults.", e);
     }
-    // Render headers immediately after we have the cloud data
     renderDynamicHeaders();
 }
 
@@ -4371,7 +4374,7 @@ function addRowsToContainer(container, dayLabel, anchorBtn = null, startIdx = 0,
         // --- NEW DRAG AND DROP HANDLE ---
         const dragHandle = document.createElement('div');
         dragHandle.innerHTML = '⣿';
-        dragHandle.style.cssText = "cursor: grab; color: #bbb; padding: 0 5px; font-size: 18px; user-select: none; display: flex; align-items: center;";
+        dragHandle.style.cssText = "flex: 0 0 25px; cursor: grab; color: #bbb; font-size: 18px; user-select: none; display: flex; align-items: center; justify-content: center;";
         dragHandle.className = "drag-handle";
         dragHandle.title = "Drag to reorder";
         
@@ -4432,10 +4435,11 @@ function addRowsToContainer(container, dayLabel, anchorBtn = null, startIdx = 0,
         });
         // --------------------------------
 
-        const cb = document.createElement('input');
+        cconst cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.className = 'row-checkbox';
-        cb.style.cssText = "margin: 0 5px; flex: 0 0 20px; cursor: pointer; transform: scale(1.2);";
+        // 🟢 THE FIX: Locked to exactly 20px wide with NO margins (Total Offset = 50px)
+        cb.style.cssText = "flex: 0 0 20px; margin: 0; cursor: pointer; transform: scale(1.2);";
         cb.onchange = (e) => handleRowSelection(e, rowDiv.id);
         rowDiv.appendChild(cb);
 
@@ -4546,6 +4550,98 @@ function addRowsToContainer(container, dayLabel, anchorBtn = null, startIdx = 0,
         container.appendChild(rowDiv);
     }
     if (anchorBtn) container.appendChild(anchorBtn);
+}
+
+function applyColumnWidths() {
+    let styleEl = document.getElementById('dynamic-col-styles');
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'dynamic-col-styles';
+        document.head.appendChild(styleEl);
+    }
+    
+    let css = '';
+    scheduleColConfig.forEach(col => {
+        if (col.visible) {
+            // ALL columns operate purely on percentages now to lock the outer boundaries
+            css += `
+                [data-col-index="${col.id}"] { 
+                    flex: 0 0 ${col.width}% !important; 
+                    width: ${col.width}% !important; 
+                    max-width: ${col.width}% !important;
+                    box-sizing: border-box !important;
+                }
+                .header-cell[data-col-id="${col.id}"] {
+                    flex: 0 0 ${col.width}% !important; 
+                    width: ${col.width}% !important; 
+                    max-width: ${col.width}% !important;
+                    box-sizing: border-box !important;
+                }
+            `;
+        }
+    });
+    styleEl.innerHTML = css;
+}
+
+function initColumnResizers() {
+    const resizers = document.querySelectorAll('.col-resizer');
+    let startX, startWidth1, startWidth2, col1, col2, activeResizer, gridWidth;
+    
+    resizers.forEach(resizer => {
+        resizer.addEventListener('mousedown', (e) => {
+            if (!document.body.classList.contains('layout-edit-mode')) return;
+            
+            e.preventDefault();
+            activeResizer = resizer;
+            activeResizer.classList.add('active-drag');
+            
+            const headerCell = resizer.parentElement;
+            const colId = parseInt(headerCell.getAttribute('data-col-id'));
+            
+            const visibleCols = scheduleColConfig.filter(c => c.visible);
+            const colIndex = visibleCols.findIndex(c => c.id === colId);
+            
+            if (colIndex === -1 || colIndex === visibleCols.length - 1) return; 
+            
+            col1 = visibleCols[colIndex];
+            col2 = visibleCols[colIndex + 1];
+            
+            startX = e.pageX;
+            startWidth1 = col1.width;
+            startWidth2 = col2.width;
+            
+            // Calculate the total available pixel space of the grid
+            gridWidth = document.getElementById('dynamic-frozen-grid').offsetWidth - 55;
+            
+            document.addEventListener('mousemove', mouseMoveHandler);
+            document.addEventListener('mouseup', mouseUpHandler);
+        });
+    });
+    
+    function mouseMoveHandler(e) {
+        if (!col1 || !col2) return;
+        
+        const deltaX = e.pageX - startX;
+        const deltaPct = (deltaX / gridWidth) * 100;
+        
+        const newWidth1 = startWidth1 + deltaPct;
+        const newWidth2 = startWidth2 - deltaPct;
+        
+        if (newWidth1 > 2 && newWidth2 > 2) {
+            col1.width = newWidth1;
+            col2.width = newWidth2;
+            applyColumnWidths(); 
+        }
+    }
+    
+    function mouseUpHandler() {
+        document.removeEventListener('mousemove', mouseMoveHandler);
+        document.removeEventListener('mouseup', mouseUpHandler);
+        if (activeResizer) {
+            activeResizer.classList.remove('active-drag');
+            activeResizer = null;
+        }
+    }
 }
 
 /**

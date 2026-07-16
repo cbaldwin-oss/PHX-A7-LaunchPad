@@ -1121,6 +1121,37 @@ html, body {
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         box-sizing: border-box;
     }
+    /* ========================================================================= */
+    /* 🟢 MASTER ALIGNMENT FIX: FORCES HEADER AND ROWS TO BE IDENTICAL SIZES     */
+    /* ========================================================================= */
+    
+    /* 1. Force the Header container to exactly match the Week container */
+    .frozen-bar {
+        width: 95% !important; 
+        margin: 0 auto !important; 
+        left: 0 !important;
+        right: 0 !important;
+        padding: 0 30px !important;
+        box-sizing: border-box !important;
+        border-left: 2px solid transparent !important; 
+        border-right: 2px solid transparent !important; 
+    }
+
+    /* 2. Force the gaps and widths to be identical across both the header and rows */
+    .frozen-grid, .cell-row {
+        width: 100% !important;
+        flex-wrap: nowrap !important;
+        box-sizing: border-box !important;
+        gap: 5px !important; /* 🟢 FORCES EXACT 5px GAP MATCH */
+        margin: 0 !important;
+    }
+    
+    .cell-row {
+        display: flex !important;
+        align-items: stretch !important;
+        padding: 6px 0 !important;
+        border-bottom: 2px solid #b0bec5 !important;
+    }
 </style>
 </head>
 <body>
@@ -3162,26 +3193,6 @@ function renderSidebarFilters() {
     renderFilterSection('vertical-results-filter-container', 'Results', window.dropdownData?.col7 || [], selectedResults, 'toggleResultFilter');
 }
 
-function renderDynamicHeaders() {
-    const headerGrid = document.getElementById('dynamic-frozen-grid');
-    headerGrid.innerHTML = '<div class="check-spacer" style="flex: 0 0 16px;"></div>';
-    
-    scheduleColConfig.forEach(col => {
-        if (!col.visible) return; // Skip hidden columns
-        
-        // Add the column header
-        const cell = document.createElement('div');
-        cell.className = 'header-cell';
-        cell.innerText = col.name;
-        headerGrid.appendChild(cell);
-        
-        // Add the vertical separator
-        const sep = document.createElement('span');
-        sep.className = 'sep';
-        sep.innerText = '|';
-        headerGrid.appendChild(sep);
-    });
-}
 
 /**
  * Reusable builder for filter sections
@@ -4686,6 +4697,45 @@ function addRowsToContainer(container, dayLabel, anchorBtn = null, startIdx = 0,
     if (anchorBtn) container.appendChild(anchorBtn);
 }
 
+function renderDynamicHeaders() {
+    const headerGrid = document.getElementById('dynamic-frozen-grid');
+    
+    // 🟢 Set to exactly 50px! 50px (Spacer) + 5px (CSS Gap) = 55px, perfectly matching the rows below!
+    headerGrid.innerHTML = '<div class="check-spacer" style="flex: 0 0 50px; box-sizing: border-box;"></div>'; 
+    
+    const visibleCols = scheduleColConfig.filter(c => c.visible);
+    if (visibleCols.length === 0) return;
+    
+    const lastColId = visibleCols[visibleCols.length - 1].id;
+    
+    scheduleColConfig.forEach(col => {
+        if (!col.visible) return;
+        
+        const cell = document.createElement('div');
+        cell.className = 'header-cell';
+        cell.setAttribute('data-col-id', col.id);
+        
+        const textSpan = document.createElement('span');
+        textSpan.innerText = col.name;
+        textSpan.style.display = 'block';
+        textSpan.style.overflow = 'hidden';
+        textSpan.style.textOverflow = 'ellipsis';
+        cell.appendChild(textSpan);
+
+        // Do not add a resizer handle to the very last column
+        if (col.id !== lastColId) {
+            const resizer = document.createElement('div');
+            resizer.className = 'col-resizer';
+            cell.appendChild(resizer);
+        }
+        
+        headerGrid.appendChild(cell);
+    });
+    
+    applyColumnWidths();
+    initColumnResizers();
+}
+
 function applyColumnWidths() {
     let styleEl = document.getElementById('dynamic-col-styles');
     if (!styleEl) {
@@ -4697,18 +4747,22 @@ function applyColumnWidths() {
     let css = '';
     scheduleColConfig.forEach(col => {
         if (col.visible) {
-            // ALL columns operate purely on percentages now to lock the outer boundaries
+            // 🟢 "flex: col.width 1 0%" uses proportional weight instead of hard widths.
+            // This forces the columns to perfectly distribute ONLY the remaining space 
+            // after the gaps/spacers are accounted for, preventing right-edge overflow!
             css += `
                 [data-col-index="${col.id}"] { 
-                    flex: 0 0 ${col.width}% !important; 
-                    width: ${col.width}% !important; 
-                    max-width: ${col.width}% !important;
+                    flex: ${col.width} 1 0% !important; 
+                    width: auto !important; 
+                    max-width: none !important;
+                    min-width: 0 !important;
                     box-sizing: border-box !important;
                 }
                 .header-cell[data-col-id="${col.id}"] {
-                    flex: 0 0 ${col.width}% !important; 
-                    width: ${col.width}% !important; 
-                    max-width: ${col.width}% !important;
+                    flex: ${col.width} 1 0% !important; 
+                    width: auto !important; 
+                    max-width: none !important;
+                    min-width: 0 !important;
                     box-sizing: border-box !important;
                 }
             `;
@@ -4719,7 +4773,7 @@ function applyColumnWidths() {
 
 function initColumnResizers() {
     const resizers = document.querySelectorAll('.col-resizer');
-    let startX, startWidth1, startWidth2, col1, col2, activeResizer, gridWidth;
+    let startX, startWidth1, startWidth2, col1, col2, activeResizer, flexGridWidth;
     
     resizers.forEach(resizer => {
         resizer.addEventListener('mousedown', (e) => {
@@ -4732,6 +4786,7 @@ function initColumnResizers() {
             const headerCell = resizer.parentElement;
             const colId = parseInt(headerCell.getAttribute('data-col-id'));
             
+            // Find current column and the adjacent column to the right
             const visibleCols = scheduleColConfig.filter(c => c.visible);
             const colIndex = visibleCols.findIndex(c => c.id === colId);
             
@@ -4744,8 +4799,10 @@ function initColumnResizers() {
             startWidth1 = col1.width;
             startWidth2 = col2.width;
             
-            // Calculate the total available pixel space of the grid
-            gridWidth = document.getElementById('dynamic-frozen-grid').offsetWidth - 55;
+            // 🟢 Calculate the EXACT flexible pixel area 
+            // (Total Grid Width minus the 50px Spacer minus the 5px gaps between columns)
+            const totalGaps = 5 * (visibleCols.length - 1);
+            flexGridWidth = document.getElementById('dynamic-frozen-grid').offsetWidth - 50 - totalGaps;
             
             document.addEventListener('mousemove', mouseMoveHandler);
             document.addEventListener('mouseup', mouseUpHandler);
@@ -4755,12 +4812,16 @@ function initColumnResizers() {
     function mouseMoveHandler(e) {
         if (!col1 || !col2) return;
         
+        // Find how many pixels you moved the mouse
         const deltaX = e.pageX - startX;
-        const deltaPct = (deltaX / gridWidth) * 100;
+        
+        // Convert those pixels into a percentage of the flexible space
+        const deltaPct = (deltaX / flexGridWidth) * 100;
         
         const newWidth1 = startWidth1 + deltaPct;
         const newWidth2 = startWidth2 - deltaPct;
         
+        // Ensure columns don't crush each other into negative space (min 2%)
         if (newWidth1 > 2 && newWidth2 > 2) {
             col1.width = newWidth1;
             col2.width = newWidth2;

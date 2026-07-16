@@ -1061,8 +1061,16 @@ function renderGateCells(row, level, maxCount) {
         }
     }
 
-    async function fetchTrackerData() {
+async function fetchTrackerData(isSilent = false) {
         try {
+            // ONLY show the full-screen loading animation if it's the initial load
+            if (!isSilent) {
+                const overlay = document.getElementById('loading-overlay');
+                overlay.style.visibility = 'visible';
+                overlay.style.opacity = '1';
+                document.getElementById('sync-status').innerText = 'Syncing...';
+            }
+
             let fetchOptions = { method: 'GET', mode: 'cors', cache: 'no-cache' };
             const response = await fetch(API_URL, fetchOptions);
             const payload = await response.json(); 
@@ -1101,7 +1109,6 @@ function renderGateCells(row, level, maxCount) {
                 updateHeaderElement('iss-status-title', globalConfig.customHeaders.issStatus, true);
             }
 
-            // Added l2Gate, l3Gate, and l4Gate to track dynamic columns (minimum of 1)
             let actualMaxCols = { l2: 0, l3: 0, l4: 0, iss: 0, l2Gate: 1, l3Gate: 1, l4Gate: 1 };
             
             rows.forEach(row => {
@@ -1109,7 +1116,6 @@ function renderGateCells(row, level, maxCount) {
                     let key = level.toLowerCase();
                     let gateKey = key + 'Gate';
                     
-                    // Track Max Support CLs
                     for(let i=1; i<=100; i++) {
                         let val = row[`${level} Support CL ${i}`];
                         if(val !== undefined && val !== null) {
@@ -1121,9 +1127,7 @@ function renderGateCells(row, level, maxCount) {
                     }
                     
                     for(let i=1; i<=20; i++) {
-                        // Use the same broad fallback to detect new columns
                         let val = row[`${level} Gate CL ${i}`] || row[`${level} Gate ${i}`] || row[`${level} Gate CL${i}`];
-                        
                         if(val !== undefined && val !== null) {
                             let clean = String(val).replace(/\(Unknown\)/ig, '').trim();
                             if(clean !== '' && clean !== 'N/A' && clean !== 'Clear' && clean !== '-') {
@@ -1148,11 +1152,9 @@ function renderGateCells(row, level, maxCount) {
             document.body.classList.toggle('hide-l3-gate', globalConfig.showL3Gate === false);
             document.body.classList.toggle('hide-l4-gate', globalConfig.showL4Gate === false);
 
-            // Remove old dynamic headers
             document.querySelectorAll('.dynamic-header').forEach(el => el.remove()); 
             document.querySelectorAll('.dynamic-gate-header').forEach(el => el.remove());
 
-            // Hide the hardcoded static gate headers so we can inject dynamic ones
             let l2GateCol = document.querySelector('.l2-gate-col:not(.dynamic-gate-header)');
             if (l2GateCol) l2GateCol.style.display = 'none';
             let l3GateCol = document.querySelector('.l3-gate-col:not(.dynamic-gate-header)');
@@ -1160,13 +1162,11 @@ function renderGateCells(row, level, maxCount) {
             let l4GateCol = document.querySelector('.l4-gate-col:not(.dynamic-gate-header)');
             if (l4GateCol) l4GateCol.style.display = 'none';
 
-            // Generate Support Headers (existing)
             if(globalConfig.maxCols.l2 > 0) document.getElementById('l2-supp-header').insertAdjacentHTML('afterend', generateHeaderHTML('L2', globalConfig.maxCols.l2));
             if(globalConfig.maxCols.l3 > 0) document.getElementById('l3-supp-header').insertAdjacentHTML('afterend', generateHeaderHTML('L3', globalConfig.maxCols.l3));
             if(globalConfig.maxCols.l4 > 0) document.getElementById('l4-supp-header').insertAdjacentHTML('afterend', generateHeaderHTML('L4', globalConfig.maxCols.l4));
             if(globalConfig.maxCols.iss > 0) document.getElementById('global-iss-header').insertAdjacentHTML('afterend', generateIssHeaderHTML(globalConfig.maxCols.iss));
 
-            // Generate Dynamic Gate Headers
             const l2Title = globalConfig.customHeaders?.l2Gate || 'Gate CL';
             const l3Title = globalConfig.customHeaders?.l3Gate || 'Gate CL';
             const l4Title = globalConfig.customHeaders?.l4Gate || 'Gate CL';
@@ -1182,7 +1182,6 @@ function renderGateCells(row, level, maxCount) {
             let issBtn = document.querySelector(`.expand-btn[data-target="global-iss"]`);
             if(issBtn) issBtn.style.display = globalConfig.maxCols.iss > 0 ? 'flex' : 'none';
 
-            // Update Header Width calculations to account for multiple gate columns
             let gateL2 = globalConfig.showL2Gate !== false ? (globalConfig.maxCols.l2Gate * 100) : 0;
             let gateL3 = globalConfig.showL3Gate !== false ? (globalConfig.maxCols.l3Gate * 100) : 0;
             let gateL4 = globalConfig.showL4Gate !== false ? (globalConfig.maxCols.l4Gate * 100) : 0;
@@ -1224,8 +1223,6 @@ function renderGateCells(row, level, maxCount) {
                 let fVal5 = String(row['L3 Overall Status'] || 'N/A').trim();
                 let fVal6 = getGateVal(row['L4 Gate CL 1']);
                 let fVal7 = String(row['L4 Overall Status'] || 'N/A').trim();
-                
-                // Uses the fixed rawText parameter to successfully register Issues for filtering
                 let fVal8 = String(issuesOpen.rawText).trim();
 
                 window.filterCache[0].add(fVal0); window.filterCache[1].add(fVal1); window.filterCache[2].add(fVal2);
@@ -1265,28 +1262,40 @@ function renderGateCells(row, level, maxCount) {
             
             container.innerHTML = htmlChunks.join('');
             window.rowNodes = Array.from(document.querySelectorAll('.cell-row'));
-            document.getElementById('sync-status').innerText = 'Live Sync Active 🟢';
             
-            const overlay = document.getElementById('loading-overlay');
-            overlay.style.opacity = '0';
-            setTimeout(() => {
-                overlay.style.visibility = 'hidden';
-            }, 400);
+            // Only update this label if the user hasn't typed in the search bar
+            if (document.getElementById('global-search-input').value.trim() === '') {
+                document.getElementById('sync-status').innerText = 'Live Sync Active 🟢';
+            }
+            
+            if (!isSilent) {
+                const overlay = document.getElementById('loading-overlay');
+                overlay.style.opacity = '0';
+                setTimeout(() => {
+                    overlay.style.visibility = 'hidden';
+                }, 400);
+            } else {
+                // If silent, re-apply any active searches or filters so the UI doesn't jump
+                executeFilters(); 
+            }
 
         } catch (error) {
             console.error("Fetch Exception: ", error);
             document.getElementById('sync-status').innerText = 'Sync Failed 🔴 (Check Console)';
-            document.getElementById('loading-status-text').innerText = 'Sync Failed 🔴';
-            document.getElementById('loading-status-text').style.color = '#d32f2f';
-            document.querySelector('.loading-subtext').innerText = 'Please refresh the page or check the console.';
         }
     }
-    
+
 window.onload = function() {
-        // 1. Boot up the tracker data grid as normal
-        fetchTrackerData();
+        // 1. Boot up the tracker data grid normally
+        fetchTrackerData(false); 
         
-        // 2. Ask the parent window for admin status using a secure message
+        // 2. NEW: Silently pull the latest equipment data every 60 seconds!
+        setInterval(() => {
+            console.log("♻️ Background Poll: Fetching latest equipment matrix...");
+            fetchTrackerData(true);
+        }, 60000);
+        
+        // 3. Ask the parent window for admin status using a secure message
         if (window.parent) {
             window.parent.postMessage({ type: 'REQUEST_AUTH_STATUS' }, '*');
         }

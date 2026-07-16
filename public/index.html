@@ -3740,12 +3740,13 @@ function stringToColor(str) {
 }
 
 function initRealtimeSync() {
+    // 1. MASTER SCHEDULE SYNC
     _supabase
         .channel('schema-db-changes')
         .on('postgres_changes', { 
-            event: '*', // Listen to INSERT, UPDATE, and DELETE
+            event: '*', 
             schema: 'public', 
-            table: 'PHXA7BackEndData' // FIX: Corrected table name
+            table: 'PHXA7BackEndData' 
         }, payload => {
             if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
                 const row = payload.new;
@@ -3764,6 +3765,51 @@ function initRealtimeSync() {
                     if (statusCell) statusCell.innerText = "...";
                 }
             }
+        })
+        .subscribe();
+
+    // 2. NEW: ADMIN USER REQUESTS SYNC
+    if (window.isAdmin) {
+        _supabase
+            .channel('admin-requests-sync')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'PHXA7access_requests' 
+            }, payload => {
+                // Auto-refresh the panel if it's currently open on screen
+                const panel = document.getElementById('admin-panel');
+                if (panel && panel.style.display !== 'none') {
+                    refreshRequestList();
+                }
+                
+                // Flash a red visual alert on the "Manage Access" button if a new request comes in
+                const btn = document.getElementById('admin-share-btn');
+                if (btn && payload.eventType === 'INSERT') {
+                    btn.style.backgroundColor = '#ffebee';
+                    btn.style.color = '#d32f2f';
+                    btn.innerHTML = '🚨 New Access Request!';
+                    setTimeout(() => {
+                        btn.style.backgroundColor = 'transparent';
+                        btn.style.color = '#01579b';
+                        btn.innerHTML = '👤 Manage Access';
+                    }, 5000);
+                }
+            })
+            .subscribe();
+    }
+
+    // 3. NEW: SYSTEM DROPDOWN DATA SYNC
+    // If another user adds an activity/asset in settings, it instantly pushes to everyone's dropdowns
+    _supabase
+        .channel('dropdown-sync')
+        .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'PHXA7dropdownoptions' 
+        }, payload => {
+            console.log("System data changed by another user. Refreshing dropdowns silently...");
+            fetchPHXA7dropdownoptions();
         })
         .subscribe();
 }

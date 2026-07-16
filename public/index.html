@@ -1032,6 +1032,95 @@ html, body {
             max-height: 65vh !important;
         }
     }
+    /* ======================================================= */
+    /* --- RESIZABLE COLUMNS & LAYOUT EDIT MODE CSS --- */
+    /* ======================================================= */
+    .col-resizer {
+        width: 12px;
+        height: 100%;
+        position: absolute;
+        right: -6px; 
+        top: 0;
+        cursor: col-resize;
+        background-color: transparent;
+        z-index: 10;
+        display: none; 
+    }
+    
+    .header-cell {
+        position: relative; 
+        border-right: 1px solid rgba(255, 255, 255, 0.4); 
+        box-sizing: border-box; 
+    }
+    
+    .header-cell:last-child {
+        border-right: none !important; 
+    }
+    
+    /* Layout Edit Mode Visuals */
+    body.layout-edit-mode .col-resizer {
+        display: block;
+        background-color: rgba(12, 68, 250, 0.4); 
+    }
+    body.layout-edit-mode .col-resizer:hover, 
+    body.layout-edit-mode .col-resizer.active-drag {
+        background-color: #0c44fa; 
+    }
+    body.layout-edit-mode .header-cell {
+        border-right: 2px dashed #0c44fa !important; 
+    }
+
+    /* Floating Toolbar - HIDDEN BY DEFAULT */
+    #layout-edit-toolbar {
+        display: none;
+        position: fixed;
+        top: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #ffffff;
+        border: 2px solid #0c44fa;
+        padding: 12px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        z-index: 10500;
+        align-items: center;
+        gap: 15px;
+    }
+    
+    /* Shows the toolbar ONLY when edit mode is activated via settings */
+    body.layout-edit-mode #layout-edit-toolbar {
+        display: flex;
+    }
+
+    /* Locks the schedule constraints so sidebars don't overlap */
+    .week-container {
+        margin: 10px auto !important; 
+        width: 95% !important;
+        border: 2px solid #2e7d32 !important;
+        border-radius: 8px !important;
+        background: #ffffff !important;
+        overflow: hidden !important; 
+        box-sizing: border-box;
+    }
+    
+    .frozen-bar {
+        position: sticky;
+        top: 50px;
+        z-index: 999;
+        background-color: #00d134f1;
+        color: rgb(255, 255, 255);
+        height: 28px;
+        display: flex;
+        align-items: center;
+        width: 88.3% !important; 
+        margin: 0 auto !important; 
+        left: 0% !important;
+        padding: 0 30px !important;
+        border-radius: 4px;
+        border-bottom: 1px solid #1b5e20;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-sizing: border-box;
+    }
 </style>
 </head>
 <body>

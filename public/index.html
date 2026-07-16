@@ -1601,43 +1601,6 @@ let appConfig = {
     sidebar: { schedule: true, equipment: true, attributes: true, dashboard: true }
 };
 
-// --- NEW: LAYOUT EDIT MODE LOGIC ---
-let backupColConfig = [];
-
-function enterLayoutEditMode() {
-    document.getElementById('schedule-config-modal').style.display = 'none';
-    backupColConfig = JSON.parse(JSON.stringify(scheduleColConfig)); // Save a backup
-    document.body.classList.add('layout-edit-mode'); // Trigger the blue visual CSS
-}
-
-function cancelLayoutEdits() {
-    scheduleColConfig = backupColConfig; // Restore the backup
-    applyColumnWidths(); // Snap back to original sizes
-    document.body.classList.remove('layout-edit-mode');
-}
-
-async function saveLayoutEdits() {
-    const btn = document.querySelector('#layout-edit-toolbar button:nth-child(2)');
-    btn.innerText = "Saving...";
-    btn.disabled = true;
-    
-    try {
-        await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'setScheduleConfig', data: scheduleColConfig }),
-            mode: 'no-cors'
-        });
-        alert("Column layout saved successfully!");
-    } catch (e) {
-        console.error("Failed to save layout.", e);
-        alert("There was an issue saving to Google Sheets.");
-    }
-    
-    btn.innerText = "Save Layout";
-    btn.disabled = false;
-    document.body.classList.remove('layout-edit-mode');
-}
-
 function applySidebarConfig() {
     const navSchedule = document.querySelector('.nav-item[onclick*="schedule"]');
     const navEquipment = document.querySelector('.nav-item[onclick*="equipment"]');

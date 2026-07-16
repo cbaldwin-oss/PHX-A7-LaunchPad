@@ -4726,63 +4726,77 @@ function initColumnResizers() {
     const resizers = document.querySelectorAll('.col-resizer');
     let startX, startWidth1, startWidth2, col1, col2, activeResizer, flexGridWidth;
     
+    // 🟢 THE FIX: Helper function to grab coordinates from BOTH mice and touch screens
+    const getPageX = (e) => e.touches ? e.touches[0].pageX : e.pageX;
+
+    const onStart = (e) => {
+        if (!document.body.classList.contains('layout-edit-mode')) return;
+        
+        activeResizer = e.target;
+        activeResizer.classList.add('active-drag');
+        
+        const headerCell = activeResizer.parentElement;
+        const colId = parseInt(headerCell.getAttribute('data-col-id'));
+        
+        const visibleCols = scheduleColConfig.filter(c => c.visible);
+        const colIndex = visibleCols.findIndex(c => c.id === colId);
+        
+        if (colIndex === -1 || colIndex === visibleCols.length - 1) return; 
+        
+        col1 = visibleCols[colIndex];
+        col2 = visibleCols[colIndex + 1];
+        
+        startX = getPageX(e);
+        startWidth1 = parseFloat(col1.width);
+        startWidth2 = parseFloat(col2.width);
+        
+        const totalGaps = 5 * (visibleCols.length - 1);
+        flexGridWidth = document.getElementById('dynamic-frozen-grid').offsetWidth - 50 - totalGaps;
+        
+        // Listen for both Mouse and Touch movements
+        document.addEventListener('mousemove', onMove, { passive: false });
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('mouseup', onEnd);
+        document.addEventListener('touchend', onEnd);
+    };
+
     resizers.forEach(resizer => {
-        resizer.addEventListener('mousedown', (e) => {
-            if (!document.body.classList.contains('layout-edit-mode')) return;
-            
-            e.preventDefault();
-            activeResizer = resizer;
-            activeResizer.classList.add('active-drag');
-            
-            const headerCell = resizer.parentElement;
-            const colId = parseInt(headerCell.getAttribute('data-col-id'));
-            
-            const visibleCols = scheduleColConfig.filter(c => c.visible);
-            const colIndex = visibleCols.findIndex(c => c.id === colId);
-            
-            if (colIndex === -1 || colIndex === visibleCols.length - 1) return; 
-            
-            col1 = visibleCols[colIndex];
-            col2 = visibleCols[colIndex + 1];
-            
-            startX = e.pageX;
-            // 🟢 THE FIX: Parses values as pure numbers so JS math never fails
-            startWidth1 = parseFloat(col1.width);
-            startWidth2 = parseFloat(col2.width);
-            
-            const totalGaps = 5 * (visibleCols.length - 1);
-            flexGridWidth = document.getElementById('dynamic-frozen-grid').offsetWidth - 50 - totalGaps;
-            
-            document.addEventListener('mousemove', mouseMoveHandler);
-            document.addEventListener('mouseup', mouseUpHandler);
-        });
+        resizer.addEventListener('mousedown', onStart);
+        resizer.addEventListener('touchstart', onStart, { passive: true });
     });
     
-    function mouseMoveHandler(e) {
+    const onMove = (e) => {
         if (!col1 || !col2 || !activeResizer) return;
         
-        const deltaX = e.pageX - startX;
+        // Prevent the iPad/browser screen from scrolling while you drag the column
+        if (e.cancelable) e.preventDefault(); 
+        
+        const currentX = getPageX(e);
+        const deltaX = currentX - startX;
+        
         const deltaPct = (deltaX / flexGridWidth) * 100;
         
         const newWidth1 = startWidth1 + deltaPct;
         const newWidth2 = startWidth2 - deltaPct;
         
-        // Stops columns from crushing each other
         if (newWidth1 > 2 && newWidth2 > 2) {
             col1.width = newWidth1;
             col2.width = newWidth2;
             applyColumnWidths(); 
         }
-    }
+    };
     
-    function mouseUpHandler() {
-        document.removeEventListener('mousemove', mouseMoveHandler);
-        document.removeEventListener('mouseup', mouseUpHandler);
+    const onEnd = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('mouseup', onEnd);
+        document.removeEventListener('touchend', onEnd);
+        
         if (activeResizer) {
             activeResizer.classList.remove('active-drag');
             activeResizer = null;
         }
-    }
+    };
 }
 
 /**

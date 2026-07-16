@@ -108,8 +108,10 @@
 
     .cell-row {
         display: flex;
-        gap: 5px;
-        margin-bottom: 4px;
+        align-items: stretch;
+        padding: 6px 0; 
+        border-bottom: 2px solid #b0bec5; 
+        gap: 5px; /* 🟢 THE FIX: Matches the header gap perfectly */
     }
 
     .cell-row input {
@@ -1033,7 +1035,7 @@ html, body {
         }
     }
  
-  /* --- RESIZABLE COLUMNS CSS --- */
+ /* --- RESIZABLE COLUMNS CSS --- */
     .col-resizer {
         width: 12px;
         height: 100%;
@@ -1115,6 +1117,7 @@ html, body {
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         box-sizing: border-box;
     }
+
     /* ========================================================================= */
     /* 🟢 MASTER ALIGNMENT FIX: FORCES HEADER AND ROWS TO BE IDENTICAL SIZES     */
     /* ========================================================================= */
@@ -1147,6 +1150,7 @@ html, body {
         padding: 6px 0 !important;
         border-bottom: 2px solid #b0bec5 !important;
     }
+    
 </style>
 </head>
 <body>
@@ -1563,6 +1567,28 @@ const defaultScheduleConfig = [
     { id: 8, name: 'Notes', visible: true, width: 10 },
     { id: 9, name: 'Duration', visible: true, width: 5 }
 ];
+
+async function loadScheduleConfig() {
+    try {
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getScheduleConfig&t=${new Date().getTime()}`);
+        const data = await response.json();
+        if (data.status === 'success' && data.data) {
+            scheduleColConfig = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
+            if (!scheduleColConfig.find(c => c.id === 9)) {
+                scheduleColConfig.push({ id: 9, name: 'Duration', visible: true, width: 5 });
+            }
+            
+            // Auto-Normalize: If old config has pixel values (e.g. > 100 sum), recalculate them into percentages
+            let totalWidth = scheduleColConfig.reduce((acc, col) => acc + (col.width || 0), 0);
+            if (totalWidth > 105) {
+                scheduleColConfig.forEach(col => { col.width = ((col.width / totalWidth) * 100); });
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load Schedule Config from cloud. Using defaults.", e);
+    }
+    renderDynamicHeaders();
+}
 
 let scheduleColConfig = defaultScheduleConfig; // Now defaults to global variable
 
@@ -3853,28 +3879,6 @@ async function verifyPermission(email) {
     return { isAuthorized: true, isAdmin: data.is_admin, company: data.company };
 }
 
-async function loadScheduleConfig() {
-    try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getScheduleConfig&t=${new Date().getTime()}`);
-        const data = await response.json();
-        if (data.status === 'success' && data.data) {
-            scheduleColConfig = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
-            if (!scheduleColConfig.find(c => c.id === 9)) {
-                scheduleColConfig.push({ id: 9, name: 'Duration', visible: true, width: 5 });
-            }
-            
-            // Auto-Normalize: If old config has pixel values (e.g. > 100 sum), recalculate them into percentages
-            let totalWidth = scheduleColConfig.reduce((acc, col) => acc + (col.width || 0), 0);
-            if (totalWidth > 105) {
-                scheduleColConfig.forEach(col => { col.width = ((col.width / totalWidth) * 100); });
-            }
-        }
-    } catch (e) {
-        console.error("Failed to load Schedule Config from cloud. Using defaults.", e);
-    }
-    renderDynamicHeaders();
-}
-
 async function loadAppConfig() {
     try {
         const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getAppConfig&t=${new Date().getTime()}`);
@@ -4518,7 +4522,6 @@ function addRowsToContainer(container, dayLabel, anchorBtn = null, startIdx = 0,
         dragHandle.className = "drag-handle";
         dragHandle.title = "Drag to reorder";
         
-        // Only allow dragging when hovering over the handle, so inputs still work normally
         dragHandle.onmouseenter = () => rowDiv.setAttribute('draggable', 'true');
         dragHandle.onmouseleave = () => rowDiv.removeAttribute('draggable');
         
@@ -4660,8 +4663,20 @@ function addRowsToContainer(container, dayLabel, anchorBtn = null, startIdx = 0,
                     saveCell(element, element.value, col, true);
                 };
             }
+            else if (col === 9) {
+                // 🟢 THE FIX: Generates a locked, non-editable text input for Col 9 (Duration)
+                element = document.createElement('input');
+                element.type = 'text';
+                element.id = cellId;
+                element.setAttribute('data-col-index', col);
+                element.readOnly = true;              // Locks the field from typing
+                element.tabIndex = -1;                // Prevents tabbing into it
+                element.style.pointerEvents = 'none'; // Prevents mouse clicks entirely
+                element.style.textAlign = 'center';   // Matches the status column look
+                element.style.fontWeight = 'bold';
+            }
             else {
-                // Generates a standard Text Input for Col 9 (Duration) and any future columns
+                // Generates a standard Text Input for any future columns
                 element = document.createElement('input');
                 element.type = 'text';
                 element.id = cellId;
@@ -4832,6 +4847,43 @@ function initColumnResizers() {
             activeResizer = null;
         }
     }
+}
+
+// --- NEW: LAYOUT EDIT MODE LOGIC ---
+let backupColConfig = [];
+
+function enterLayoutEditMode() {
+    document.getElementById('schedule-config-modal').style.display = 'none';
+    backupColConfig = JSON.parse(JSON.stringify(scheduleColConfig)); // Save a backup
+    document.body.classList.add('layout-edit-mode'); // Trigger the blue visual CSS
+}
+
+function cancelLayoutEdits() {
+    scheduleColConfig = backupColConfig; // Restore the backup
+    applyColumnWidths(); // Snap back to original sizes
+    document.body.classList.remove('layout-edit-mode');
+}
+
+async function saveLayoutEdits() {
+    const btn = document.querySelector('#layout-edit-toolbar button:nth-child(2)');
+    btn.innerText = "Saving...";
+    btn.disabled = true;
+    
+    try {
+        await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'setScheduleConfig', data: scheduleColConfig }),
+            mode: 'no-cors'
+        });
+        alert("Column layout saved successfully!");
+    } catch (e) {
+        console.error("Failed to save layout.", e);
+        alert("There was an issue saving to Google Sheets.");
+    }
+    
+    btn.innerText = "Save Layout";
+    btn.disabled = false;
+    document.body.classList.remove('layout-edit-mode');
 }
 
 /**

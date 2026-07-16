@@ -1032,19 +1032,23 @@ html, body {
             max-height: 65vh !important;
         }
     }
-    /* ======================================================= */
-    /* --- RESIZABLE COLUMNS & LAYOUT EDIT MODE CSS --- */
-    /* ======================================================= */
+    /* ========================================================================= */
+    /* --- RESIZABLE COLUMNS & LAYOUT EDIT MODE CSS ---                          */
+    /* ========================================================================= */
     .col-resizer {
-        width: 12px;
-        height: 100%;
+        width: 30px; /* Massive 30px grab area */
+        height: 150vh; /* Drops all the way down the screen over the rows */
         position: absolute;
-        right: -6px; 
+        right: -15px; /* Perfectly centered over the gap */
         top: 0;
         cursor: col-resize;
         background-color: transparent;
-        z-index: 10;
+        z-index: 10500;
         display: none; 
+    }
+    
+    .header-cell, .frozen-bar, .frozen-grid {
+        overflow: visible !important; /* 🟢 THE FIX: Prevents the drag handle from being chopped off */
     }
     
     .header-cell {
@@ -1060,17 +1064,28 @@ html, body {
     /* Layout Edit Mode Visuals */
     body.layout-edit-mode .col-resizer {
         display: block;
-        background-color: rgba(12, 68, 250, 0.4); 
     }
-    body.layout-edit-mode .col-resizer:hover, 
-    body.layout-edit-mode .col-resizer.active-drag {
-        background-color: #0c44fa; 
-    }
-    body.layout-edit-mode .header-cell {
-        border-right: 2px dashed #0c44fa !important; 
+    
+    /* Draw a distinct dashed line down the middle of the handle */
+    body.layout-edit-mode .col-resizer::after {
+        content: '';
+        position: absolute;
+        left: 14px; /* Center of the 30px handle */
+        top: 0;
+        width: 2px;
+        height: 150vh;
+        background: repeating-linear-gradient(to bottom, #0c44fa, #0c44fa 8px, transparent 8px, transparent 14px);
+        z-index: 10500;
     }
 
-    /* Floating Toolbar - HIDDEN BY DEFAULT */
+    body.layout-edit-mode .col-resizer:hover::after, 
+    body.layout-edit-mode .col-resizer.active-drag::after {
+        background: #0c44fa; /* Turns solid blue when you grab it */
+        width: 4px;
+        left: 13px;
+    }
+
+    /* Floating Toolbar */
     #layout-edit-toolbar {
         display: none;
         position: fixed;
@@ -1082,75 +1097,13 @@ html, body {
         padding: 12px 24px;
         border-radius: 8px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        z-index: 10500;
+        z-index: 10600;
         align-items: center;
         gap: 15px;
     }
     
-    /* Shows the toolbar ONLY when edit mode is activated via settings */
     body.layout-edit-mode #layout-edit-toolbar {
         display: flex;
-    }
-
-    /* Locks the schedule constraints so sidebars don't overlap */
-    .week-container {
-        margin: 10px auto !important; 
-        width: 95% !important;
-        border: 2px solid #2e7d32 !important;
-        border-radius: 8px !important;
-        background: #ffffff !important;
-        overflow: hidden !important; 
-        box-sizing: border-box;
-    }
-    
-    .frozen-bar {
-        position: sticky;
-        top: 50px;
-        z-index: 999;
-        background-color: #00d134f1;
-        color: rgb(255, 255, 255);
-        height: 28px;
-        display: flex;
-        align-items: center;
-        width: 88.3% !important; 
-        margin: 0 auto !important; 
-        left: 0% !important;
-        padding: 0 30px !important;
-        border-radius: 4px;
-        border-bottom: 1px solid #1b5e20;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        box-sizing: border-box;
-    }
-    /* ========================================================================= */
-    /* 🟢 MASTER ALIGNMENT FIX: FORCES HEADER AND ROWS TO BE IDENTICAL SIZES     */
-    /* ========================================================================= */
-    
-    /* 1. Force the Header container to exactly match the Week container */
-    .frozen-bar {
-        width: 95% !important; 
-        margin: 0 auto !important; 
-        left: 0 !important;
-        right: 0 !important;
-        padding: 0 30px !important;
-        box-sizing: border-box !important;
-        border-left: 2px solid transparent !important; 
-        border-right: 2px solid transparent !important; 
-    }
-
-    /* 2. Force the gaps and widths to be identical across both the header and rows */
-    .frozen-grid, .cell-row {
-        width: 100% !important;
-        flex-wrap: nowrap !important;
-        box-sizing: border-box !important;
-        gap: 5px !important; /* 🟢 FORCES EXACT 5px GAP MATCH */
-        margin: 0 !important;
-    }
-    
-    .cell-row {
-        display: flex !important;
-        align-items: stretch !important;
-        padding: 6px 0 !important;
-        border-bottom: 2px solid #b0bec5 !important;
     }
 </style>
 </head>
@@ -4700,7 +4653,7 @@ function addRowsToContainer(container, dayLabel, anchorBtn = null, startIdx = 0,
 function renderDynamicHeaders() {
     const headerGrid = document.getElementById('dynamic-frozen-grid');
     
-    // 🟢 Set to exactly 50px! 50px (Spacer) + 5px (CSS Gap) = 55px, perfectly matching the rows below!
+    // 50px (Spacer) + 5px (CSS Gap) = 55px, perfectly matching the rows below!
     headerGrid.innerHTML = '<div class="check-spacer" style="flex: 0 0 50px; box-sizing: border-box;"></div>'; 
     
     const visibleCols = scheduleColConfig.filter(c => c.visible);
@@ -4747,9 +4700,7 @@ function applyColumnWidths() {
     let css = '';
     scheduleColConfig.forEach(col => {
         if (col.visible) {
-            // 🟢 "flex: col.width 1 0%" uses proportional weight instead of hard widths.
-            // This forces the columns to perfectly distribute ONLY the remaining space 
-            // after the gaps/spacers are accounted for, preventing right-edge overflow!
+            // 🟢 The Proportional Engine: Forces columns to strictly divide the available free space!
             css += `
                 [data-col-index="${col.id}"] { 
                     flex: ${col.width} 1 0% !important; 
@@ -4786,7 +4737,6 @@ function initColumnResizers() {
             const headerCell = resizer.parentElement;
             const colId = parseInt(headerCell.getAttribute('data-col-id'));
             
-            // Find current column and the adjacent column to the right
             const visibleCols = scheduleColConfig.filter(c => c.visible);
             const colIndex = visibleCols.findIndex(c => c.id === colId);
             
@@ -4796,11 +4746,10 @@ function initColumnResizers() {
             col2 = visibleCols[colIndex + 1];
             
             startX = e.pageX;
-            startWidth1 = col1.width;
-            startWidth2 = col2.width;
+            // 🟢 THE FIX: Parses values as pure numbers so JS math never fails
+            startWidth1 = parseFloat(col1.width);
+            startWidth2 = parseFloat(col2.width);
             
-            // 🟢 Calculate the EXACT flexible pixel area 
-            // (Total Grid Width minus the 50px Spacer minus the 5px gaps between columns)
             const totalGaps = 5 * (visibleCols.length - 1);
             flexGridWidth = document.getElementById('dynamic-frozen-grid').offsetWidth - 50 - totalGaps;
             
@@ -4810,18 +4759,15 @@ function initColumnResizers() {
     });
     
     function mouseMoveHandler(e) {
-        if (!col1 || !col2) return;
+        if (!col1 || !col2 || !activeResizer) return;
         
-        // Find how many pixels you moved the mouse
         const deltaX = e.pageX - startX;
-        
-        // Convert those pixels into a percentage of the flexible space
         const deltaPct = (deltaX / flexGridWidth) * 100;
         
         const newWidth1 = startWidth1 + deltaPct;
         const newWidth2 = startWidth2 - deltaPct;
         
-        // Ensure columns don't crush each other into negative space (min 2%)
+        // Stops columns from crushing each other
         if (newWidth1 > 2 && newWidth2 > 2) {
             col1.width = newWidth1;
             col2.width = newWidth2;

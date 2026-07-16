@@ -1032,30 +1032,20 @@ html, body {
             max-height: 65vh !important;
         }
     }
- /* ========================================================================= */
+ 
+    /* ========================================================================= */
     /* --- RESIZABLE COLUMNS & LAYOUT EDIT MODE CSS ---                          */
     /* ========================================================================= */
     .col-resizer {
-        width: 30px; 
-        height: 150vh; 
+        width: 30px; /* Massive 30px grab area */
+        height: 150vh; /* Drops all the way down the screen over the rows */
         position: absolute;
-        right: -15px; 
+        right: -15px; /* Perfectly centered over the gap */
         top: 0;
         cursor: col-resize;
         background-color: transparent;
         z-index: 10500;
         display: none; 
-        touch-action: none; /* 🟢 THE FIX: Disables iPad scrolling when grabbing the line */
-    }
-    
-    /* Layout Edit Mode Visuals */
-    body.layout-edit-mode {
-        user-select: none; /* 🟢 THE FIX: Disables text highlighting across the whole screen */
-        -webkit-user-select: none; 
-    }
-    
-    body.layout-edit-mode .col-resizer {
-        display: block;
     }
     
     .header-cell, .frozen-bar, .frozen-grid {
@@ -1070,6 +1060,11 @@ html, body {
     
     .header-cell:last-child {
         border-right: none !important; 
+    }
+    
+    /* Layout Edit Mode Visuals */
+    body.layout-edit-mode .col-resizer {
+        display: block;
     }
     
     /* Draw a distinct dashed line down the middle of the handle */
@@ -4765,19 +4760,12 @@ function initColumnResizers() {
     let startX, startWidth1, startWidth2, col1, col2, activeResizer, flexGridWidth;
     
     resizers.forEach(resizer => {
-        // 🟢 THE FIX: Pointer Events capture Mouse, Touch, and Stylus simultaneously
-        resizer.addEventListener('pointerdown', (e) => {
+        resizer.addEventListener('mousedown', (e) => {
             if (!document.body.classList.contains('layout-edit-mode')) return;
             
-            // Stop the browser from attempting native behaviors
             e.preventDefault();
-            e.stopPropagation();
-            
             activeResizer = resizer;
             activeResizer.classList.add('active-drag');
-            
-            // 🟢 THE FIX: Locks the browser focus to this exact blue line while dragging!
-            activeResizer.setPointerCapture(e.pointerId);
             
             const headerCell = resizer.parentElement;
             const colId = parseInt(headerCell.getAttribute('data-col-id'));
@@ -4790,52 +4778,43 @@ function initColumnResizers() {
             col1 = visibleCols[colIndex];
             col2 = visibleCols[colIndex + 1];
             
-            // clientX works universally for both touch and mouse in Pointer Events
-            startX = e.clientX; 
+            startX = e.pageX;
+            // 🟢 THE FIX: Parses values as pure numbers so JS math never fails
             startWidth1 = parseFloat(col1.width);
             startWidth2 = parseFloat(col2.width);
             
             const totalGaps = 5 * (visibleCols.length - 1);
             flexGridWidth = document.getElementById('dynamic-frozen-grid').offsetWidth - 50 - totalGaps;
             
-            // Attach movement listeners ONLY to the active resizer
-            activeResizer.addEventListener('pointermove', onMove);
-            activeResizer.addEventListener('pointerup', onEnd);
-            activeResizer.addEventListener('pointercancel', onEnd);
+            document.addEventListener('mousemove', mouseMoveHandler);
+            document.addEventListener('mouseup', mouseUpHandler);
         });
     });
     
-    function onMove(e) {
-        if (!activeResizer || !col1 || !col2) return;
+    function mouseMoveHandler(e) {
+        if (!col1 || !col2 || !activeResizer) return;
         
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const deltaX = e.clientX - startX;
+        const deltaX = e.pageX - startX;
         const deltaPct = (deltaX / flexGridWidth) * 100;
         
         const newWidth1 = startWidth1 + deltaPct;
         const newWidth2 = startWidth2 - deltaPct;
         
-        // Stops columns from crushing each other (Minimum 3% width)
-        if (newWidth1 >= 3 && newWidth2 >= 3) {
+        // Stops columns from crushing each other
+        if (newWidth1 > 2 && newWidth2 > 2) {
             col1.width = newWidth1;
             col2.width = newWidth2;
             applyColumnWidths(); 
         }
     }
     
-    function onEnd(e) {
-        if (!activeResizer) return;
-        
-        // Release the cursor lock and destroy the listeners
-        activeResizer.releasePointerCapture(e.pointerId);
-        activeResizer.removeEventListener('pointermove', onMove);
-        activeResizer.removeEventListener('pointerup', onEnd);
-        activeResizer.removeEventListener('pointercancel', onEnd);
-        
-        activeResizer.classList.remove('active-drag');
-        activeResizer = null;
+    function mouseUpHandler() {
+        document.removeEventListener('mousemove', mouseMoveHandler);
+        document.removeEventListener('mouseup', mouseUpHandler);
+        if (activeResizer) {
+            activeResizer.classList.remove('active-drag');
+            activeResizer = null;
+        }
     }
 }
 

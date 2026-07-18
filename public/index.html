@@ -1242,17 +1242,6 @@ body.dark-mode .tool-btn {
 body.dark-mode .tool-btn:hover {
     background-color: #383838 !important;
 }
-/* --- MUTED STATUS COLORS (Using CSS Filters) --- */
-/* This automatically dims and desaturates any cell that has a background color applied by JS */
-body.dark-mode .status-cell,
-body.dark-mode .dynamic-cell,
-body.dark-mode .colored-cell,
-body.dark-mode [style*="background-color: rgb"],
-body.dark-mode [style*="background-color: #"] {
-    /* Dim the brightness and lower the saturation so it isn't jarring on dark backgrounds */
-    filter: brightness(0.65) saturate(0.7) contrast(1.2) !important;
-    color: #ffffff !important; /* Ensure text inside stays readable */
-}
 
 /* --- ATTRIBUTES PAGE & TABLES OVERRIDES --- */
 body.dark-mode #attributes-view,

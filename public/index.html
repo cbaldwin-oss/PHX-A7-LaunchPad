@@ -1242,6 +1242,66 @@ body.dark-mode .tool-btn {
 body.dark-mode .tool-btn:hover {
     background-color: #383838 !important;
 }
+/* --- MUTED STATUS COLORS (Using CSS Filters) --- */
+/* This automatically dims and desaturates any cell that has a background color applied by JS */
+body.dark-mode .status-cell,
+body.dark-mode .dynamic-cell,
+body.dark-mode .colored-cell,
+body.dark-mode [style*="background-color: rgb"],
+body.dark-mode [style*="background-color: #"] {
+    /* Dim the brightness and lower the saturation so it isn't jarring on dark backgrounds */
+    filter: brightness(0.65) saturate(0.7) contrast(1.2) !important;
+    color: #ffffff !important; /* Ensure text inside stays readable */
+}
+
+/* --- ATTRIBUTES PAGE & TABLES OVERRIDES --- */
+body.dark-mode #attributes-view,
+body.dark-mode .attributes-container,
+body.dark-mode .data-table-container,
+body.dark-mode table {
+    background-color: #1e1e1e !important;
+    color: #e0e0e0 !important;
+}
+
+/* Table Headers & Borders */
+body.dark-mode th {
+    background-color: #2c2c2c !important;
+    color: #81c784 !important; /* Muted Green for headers */
+    border-bottom: 2px solid #4caf50 !important;
+}
+
+body.dark-mode td,
+body.dark-mode tr {
+    border-color: #333 !important;
+    background-color: transparent !important;
+}
+
+/* Alternate row striping for tables */
+body.dark-mode tr:nth-child(even) td {
+    background-color: #252525 !important;
+}
+body.dark-mode tr:hover td {
+    background-color: #333 !important;
+}
+
+/* --- EQUIPMENT TRACKER PHASES --- */
+/* Targets the dividers and headers between phases */
+body.dark-mode .phase-header,
+body.dark-mode .phase-divider,
+body.dark-mode .group-header,
+body.dark-mode .section-title {
+    background-color: #252525 !important;
+    color: #81c784 !important;
+    border-top: 2px solid #444 !important;
+    border-bottom: 2px solid #444 !important;
+    text-shadow: 1px 1px 2px #000 !important;
+}
+
+/* Mute the specific phase row if it's a solid block */
+body.dark-mode .phase-row {
+    background: linear-gradient(90deg, #1e1e1e, #2c2c2c) !important;
+    border-left: 4px solid #4caf50 !important;
+}
     
 </style>
 </head>
@@ -1695,23 +1755,24 @@ async function loadScheduleConfig() {
     renderDynamicHeaders();
 }
 
-// --- DARK MODE LOGIC ---
 function toggleDarkMode() {
     const body = document.body;
     const btn = document.getElementById('dark-mode-toggle');
     const isDark = body.classList.toggle('dark-mode');
     
     // Swap icon based on state
-    btn.innerText = isDark ? '☀️' : '🌙';
+    if (btn) btn.innerText = isDark ? '☀️' : '🌙';
     
     // Save preference to local storage
     localStorage.setItem('launchpad_dark_mode', isDark ? 'enabled' : 'disabled');
     
-    // If the equipment tracker iframe is loaded, trigger dark mode inside it too
-    const equipIframe = document.querySelector('#equipment-tracker-view iframe');
-    if (equipIframe && equipIframe.contentWindow) {
-        equipIframe.contentWindow.postMessage({ type: 'TOGGLE_DARK_MODE', isDark: isDark }, '*');
-    }
+    // Broadcast to ALL iframes on the page (Equipment Tracker, Attributes, etc.)
+    const iframes = document.querySelectorAll('iframe');
+    iframes.forEach(iframe => {
+        if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({ type: 'TOGGLE_DARK_MODE', isDark: isDark }, '*');
+        }
+    });
 }
 
 // Auto-check preference on load

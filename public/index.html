@@ -1150,6 +1150,98 @@ html, body {
         padding: 6px 0 !important;
         border-bottom: 2px solid #b0bec5 !important;
     }
+
+    /* --- DARK MODE OVERRIDES --- */
+body.dark-mode {
+    background-color: #121212 !important;
+    color: #e0e0e0 !important;
+}
+
+/* Base structural elements */
+body.dark-mode .header,
+body.dark-mode #sidebar,
+body.dark-mode #filter-sidebar,
+body.dark-mode #filter-collapsed,
+body.dark-mode .subheader,
+body.dark-mode #app-body,
+body.dark-mode .rows-container,
+body.dark-mode .week-content,
+body.dark-mode .week-container,
+body.dark-mode .frozen-bar,
+body.dark-mode .date-header,
+body.dark-mode .tracker-container,
+body.dark-mode .modal-box,
+body.dark-mode #auth-prompt,
+body.dark-mode #admin-panel,
+body.dark-mode #ready-activities-panel,
+body.dark-mode #history-menu {
+    background-color: #1e1e1e !important;
+    border-color: #333 !important;
+    color: #e0e0e0 !important;
+}
+
+/* Inputs and interactive elements */
+body.dark-mode input,
+body.dark-mode select,
+body.dark-mode textarea {
+    background-color: #2c2c2c !important;
+    color: #e0e0e0 !important;
+    border-color: #444 !important;
+}
+
+body.dark-mode input:focus, 
+body.dark-mode select:focus, 
+body.dark-mode textarea:focus {
+    background-color: #383838 !important;
+    border-color: #4caf50 !important; /* Green highlight to match theme */
+}
+
+/* Text overrides */
+body.dark-mode .header-center span,
+body.dark-mode .date-header,
+body.dark-mode h2,
+body.dark-mode h3 {
+    color: #81c784 !important; /* Lighter green for readability on dark */
+}
+
+body.dark-mode .nav-text,
+body.dark-mode .view-btn,
+body.dark-mode .filter-header-item {
+    color: #aaa !important;
+}
+
+body.dark-mode .nav-item:hover,
+body.dark-mode .nav-item.active {
+    background-color: #2c2c2c !important;
+    color: #81c784 !important;
+    border-left-color: #81c784 !important;
+}
+
+body.dark-mode .view-btn.active {
+    color: #81c784 !important;
+    border-bottom-color: #81c784 !important;
+}
+
+/* Grid and cell rows */
+body.dark-mode .cell-row {
+    border-bottom: 2px solid #333 !important;
+    background-color: #1e1e1e !important;
+}
+
+body.dark-mode .cell-row:hover {
+    background-color: #2a2a2a !important;
+}
+
+/* Tools and Buttons */
+body.dark-mode .tool-btn {
+    background-color: #2c2c2c !important;
+    color: #e0e0e0 !important;
+    border-color: #555 !important;
+}
+
+body.dark-mode .tool-btn:hover {
+    background-color: #383838 !important;
+}
     
 </style>
 </head>
@@ -1163,6 +1255,9 @@ html, body {
         <span>LaunchPad</span>
     </div>
     <div class="header-right">
+        <button id="dark-mode-toggle" class="view-btn" onclick="toggleDarkMode()" style="font-size: 18px; margin-right: 15px;" title="Toggle Dark Mode">
+        🌙
+    </button>
         <button id="admin-share-btn" class="view-btn" style="display: none; color: #01579b;" onclick="toggleAdminPanel()">
             👤 Manage Access
         </button>
@@ -1599,6 +1694,34 @@ async function loadScheduleConfig() {
     }
     renderDynamicHeaders();
 }
+
+// --- DARK MODE LOGIC ---
+function toggleDarkMode() {
+    const body = document.body;
+    const btn = document.getElementById('dark-mode-toggle');
+    const isDark = body.classList.toggle('dark-mode');
+    
+    // Swap icon based on state
+    btn.innerText = isDark ? '☀️' : '🌙';
+    
+    // Save preference to local storage
+    localStorage.setItem('launchpad_dark_mode', isDark ? 'enabled' : 'disabled');
+    
+    // If the equipment tracker iframe is loaded, trigger dark mode inside it too
+    const equipIframe = document.querySelector('#equipment-tracker-view iframe');
+    if (equipIframe && equipIframe.contentWindow) {
+        equipIframe.contentWindow.postMessage({ type: 'TOGGLE_DARK_MODE', isDark: isDark }, '*');
+    }
+}
+
+// Auto-check preference on load
+window.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('launchpad_dark_mode') === 'enabled') {
+        document.body.classList.add('dark-mode');
+        const btn = document.getElementById('dark-mode-toggle');
+        if (btn) btn.innerText = '☀️';
+    }
+});
 
 let scheduleColConfig = defaultScheduleConfig; // Now defaults to global variable
 

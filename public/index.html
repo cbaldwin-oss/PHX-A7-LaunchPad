@@ -1196,6 +1196,14 @@ body.dark-mode textarea:focus {
     border-color: #4caf50 !important; /* Green highlight to match theme */
 }
 
+/* Preserve column color classes in dark mode so status colors remain visible */
+body.dark-mode select.bg-green, body.dark-mode input.bg-green, body.dark-mode textarea.bg-green { background-color: #c8e6c9 !important; color: #1b5e20 !important; }
+body.dark-mode select.bg-yellow, body.dark-mode input.bg-yellow, body.dark-mode textarea.bg-yellow { background-color: #fff9c4 !important; color: #f57f17 !important; }
+body.dark-mode select.bg-blue, body.dark-mode input.bg-blue, body.dark-mode textarea.bg-blue { background-color: #e3f2fd !important; color: #0d47a1 !important; }
+body.dark-mode select.bg-red, body.dark-mode input.bg-red, body.dark-mode textarea.bg-red { background-color: #ffcdd2 !important; color: #b71c1c !important; }
+body.dark-mode select.bg-grey, body.dark-mode input.bg-grey, body.dark-mode textarea.bg-grey { background-color: #f5f5f5 !important; color: #616161 !important; }
+body.dark-mode select.bg-filled, body.dark-mode input.bg-filled, body.dark-mode textarea.bg-filled { background-color: #e1f5fe !important; color: #01579b !important; }
+
 /* Text overrides */
 body.dark-mode .header-center span,
 body.dark-mode .date-header,

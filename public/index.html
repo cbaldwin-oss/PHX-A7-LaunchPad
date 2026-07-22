@@ -4066,8 +4066,8 @@ async function handleForgotPin() {
         return;
     }
     const { error } = await _supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: "https://phx-a7-launch-pad.vercel.app/", // Force it to point to your Vercel frontend
-});
+        redirectTo: "https://phx-a7-launch-pad.vercel.app/" 
+    }); // <-- ADDED THE MISSING `});` HERE
 
     if (error) {
         errorEl.innerText = error.message;
@@ -5469,14 +5469,15 @@ async function handleAuthAction() {
         }
 
         if (isSignUpMode) {
-            const { error } = await _supabase.auth.signUp({ 
-    email: email, 
-    password: pin,
-    options: {
-        // This dynamically sends them back to the exact current page folder
-        emailRedirectTo: window.location.origin + window.location.pathname 
-    }
-});
+            const { error } = await _supabase.auth.signUp({
+                email: email,
+                password: pin,
+                options: {
+                    // This dynamically sends them back to the exact current page folder
+                    emailRedirectTo: window.location.origin + window.location.pathname
+                }
+            }); // <-- ADDED THE MISSING `});` HERE
+
             if (error) throw error;
             successEl.innerText = "Success! Check your email to verify your account.";
             successEl.style.display = 'block';

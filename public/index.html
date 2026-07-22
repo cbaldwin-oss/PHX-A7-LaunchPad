@@ -1352,10 +1352,6 @@ body.dark-mode .phase-row {
 
     
     <div style="margin-top: auto; width: 100%;">
-        <div id="nav-settings" class="nav-item" onclick="openScheduleConfigModal()" style="display: none; border-top: 1px solid #eee;">
-    <span class="nav-icon">⚙️</span>
-    <span class="nav-text">Settings</span>
-</div>
         
         <div class="nav-item" onclick="logout()" style="border-top: 1px solid #eee;">
             <span class="nav-icon" style="color: #d32f2f;">🚪</span> <span class="nav-text" style="color: #d32f2f; font-weight: bold;">Logout</span>
@@ -1769,6 +1765,14 @@ function toggleDarkMode() {
         if (iframe && iframe.contentWindow) {
             iframe.contentWindow.postMessage({ type: 'TOGGLE_DARK_MODE', isDark: isDark }, '*');
         }
+    });
+
+    // Re-run the color logic on every colored cell so already-rendered rows
+    // immediately pick up the correct light/dark colors instead of waiting
+    // for the next edit.
+    document.querySelectorAll('.cell-row select, .cell-row input[type="text"], .cell-row textarea, .cell-row .status-cell').forEach(el => {
+        const val = el.tagName === 'SPAN' ? el.innerText : el.value;
+        applyCellColor(el, val);
     });
 }
 
@@ -4575,28 +4579,36 @@ function applyCellColor(element, value) {
     }
 
     // --- Color Logic (Expanded to catch all standard statuses) ---
+    // Use setProperty(..., 'important') so these inline colors always win over the
+    // dark-mode stylesheet's "body.dark-mode input/select/textarea { background-color: ... !important }"
+    // rule, which would otherwise flatten every select/input/textarea to the same dark grey.
+    const isDark = document.body.classList.contains('dark-mode');
+
     if (cleanVal === "" || lowerVal === "select..." || lowerVal === "..." || lowerVal === "na" || lowerVal.includes("no rule matched")) {
-        element.style.backgroundColor = "#f9f9f9";
-        element.style.color = "#666";
+        element.style.setProperty('background-color', isDark ? '#2c2c2c' : '#f9f9f9', 'important');
+        element.style.setProperty('color', isDark ? '#888888' : '#666666', 'important');
         return;
     }
 
     // Default color (Light Blue)
-    element.style.backgroundColor = "#e1f5fe";
-    element.style.color = "#01579b";
+    let bg = "#e1f5fe";
+    let fg = "#01579b";
 
     // Green: Pass, High, Ready, Completed, Closed, Clear, 4
     if (lowerVal.includes("high") || lowerVal.includes("pass") || lowerVal.includes(" 4") || lowerVal.includes("ready") || lowerVal.includes("completed") || lowerVal.includes("closed") || lowerVal.includes("clear")) {
-        element.style.backgroundColor = "#c8e6c9"; element.style.color = "#1b5e20";
+        bg = "#c8e6c9"; fg = "#1b5e20";
     } 
     // Yellow: Med, Hold, In Progress, Pending, 2, Checking
     else if (lowerVal.includes("med") || lowerVal.includes("hold") || lowerVal.includes(" 2") || lowerVal.includes("progress") || lowerVal.includes("pending") || lowerVal.includes("checking")) {
-        element.style.backgroundColor = "#fff9c4"; element.style.color = "#f57f17";
+        bg = "#fff9c4"; fg = "#f57f17";
     } 
     // Red: Open, Fail, Incomplete, Issue, Rejected
     else if (lowerVal.includes("open") || lowerVal.includes("fail") || lowerVal.includes("incomplete") || lowerVal.includes("issue") || lowerVal.includes("rejected")) {
-        element.style.backgroundColor = "#ffcdd2"; element.style.color = "#b71c1c";
+        bg = "#ffcdd2"; fg = "#b71c1c";
     }
+
+    element.style.setProperty('background-color', bg, 'important');
+    element.style.setProperty('color', fg, 'important');
 }
 
 async function syncAllAssetLookups() {

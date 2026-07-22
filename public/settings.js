@@ -74,7 +74,7 @@ const Settings = {
         `).join('');
     },
 
-    async addOption() {
+async addOption() {
         const input = document.getElementById('new-option-input');
         const btn = document.getElementById('add-opt-btn');
         const val = input.value.trim();
@@ -83,49 +83,82 @@ const Settings = {
         btn.disabled = true;
         btn.innerText = "Saving...";
 
-        const payload = {};
-        payload[this.currentCategory] = val;
+        try {
+            const payload = {};
+            payload[this.currentCategory] = val;
 
-        const { error } = await _supabase.from('dropdownoptions').insert([payload]);
+            // THE FIX 1: Updated the table name to match your Supabase schema
+            const { error } = await _supabase.from('PHXA7dropdownoptions').insert([payload]);
 
-        if (error) {
-            alert("Error: " + error.message);
-        } else {
+            if (error) throw error;
+
             input.value = "";
-            await fetchDropdownOptions(); // Fetch new data
-            if (typeof refreshDropdowns === 'function') refreshDropdowns(); // Update main grid
-            this.refreshList(); // Update the settings list only
+            
+            // THE FIX 2: Call the correct fetch function from your index.html
+            if (typeof fetchPHXA7dropdownoptions === 'function') {
+                await fetchPHXA7dropdownoptions(); 
+            }
+            
+            if (typeof refreshDropdowns === 'function') refreshDropdowns(); 
+            this.refreshList(); 
+            
+        } catch (error) {
+            console.error("Settings Add Error:", error);
+            alert("Error: " + (error.message || "Failed to save option."));
+        } finally {
+            // THE FIX 3: Placed inside 'finally' so it ALWAYS resets the button
+            btn.disabled = false;
+            btn.innerText = "Add";
         }
-        btn.disabled = false;
-        btn.innerText = "Add";
     },
 
     async deleteOption(val) {
         if (!confirm(`Delete "${val}"?`)) return;
         
-        const update = {};
-        update[this.currentCategory] = null;
+        try {
+            const update = {};
+            update[this.currentCategory] = null;
 
-        const { error } = await _supabase
-            .from('dropdownoptions')
-            .update(update)
-            .eq(this.currentCategory, val);
+            const { error } = await _supabase
+                .from('PHXA7dropdownoptions') // Updated table name
+                .update(update)
+                .eq(this.currentCategory, val);
 
-        if (error) {
-            alert("Error: " + error.message);
-        } else {
-            await fetchDropdownOptions();
+            if (error) throw error;
+
+            if (typeof fetchPHXA7dropdownoptions === 'function') {
+                await fetchPHXA7dropdownoptions(); // Updated function name
+            }
+            
             if (typeof refreshDropdowns === 'function') refreshDropdowns();
             this.refreshList();
+            
+        } catch (error) {
+            console.error("Settings Delete Error:", error);
+            alert("Error: " + (error.message || "Failed to delete option."));
         }
     },
 
     async cleanup(btn) {
         btn.disabled = true;
         btn.innerText = "Cleaning...";
-        await _supabase.from('dropdownoptions').delete().is('Times', null).is('Places', null).is('Activities', null).is('Assets', null).is('Trade_Partners', null).is('Results', null);
-        alert("Empty rows removed.");
-        btn.disabled = false;
-        btn.innerText = "Clear Empty Database Rows";
+        
+        try {
+            const { error } = await _supabase
+                .from('PHXA7dropdownoptions') // Updated table name
+                .delete()
+                .is('Times', null).is('Places', null).is('Activities', null)
+                .is('Assets', null).is('Trade_Partners', null).is('Results', null);
+                
+            if (error) throw error;
+            alert("Empty rows removed.");
+            
+        } catch (error) {
+            console.error("Settings Cleanup Error:", error);
+            alert("Error: " + (error.message || "Cleanup failed."));
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Clear Empty Database Rows";
+        }
     }
 };

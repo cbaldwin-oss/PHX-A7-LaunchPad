@@ -3780,6 +3780,23 @@ async function triggerFullStatusRefresh() {
         const { createClient } = supabase;
         const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+        // --- THE FIX: Let Supabase officially flag when a password reset happens ---
+        _supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'PASSWORD_RECOVERY') {
+                window.isUpdateMode = true; // Raise the flag!
+                
+                // Force the UI to the PIN Update screen instantly
+                document.getElementById('loading-spinner-section').style.display = 'none';
+                document.getElementById('auth-prompt').style.display = 'block';
+                
+                document.getElementById('auth-title').innerText = "Update PIN";
+                document.getElementById('auth-subtitle').innerText = "Enter your new 6-digit PIN below.";
+                document.getElementById('auth-btn').innerText = "Set New PIN";
+                document.getElementById('user-email-input').style.display = 'none';
+                document.getElementById('auth-toggle-link').parentElement.style.display = 'none';
+            }
+        });
+
         // 1. Define the Admin Email at the top of your <script>
 const ADMIN_EMAIL = "cbaldwin@criticalarccx.com"; // Change to your actual email
 
@@ -4043,16 +4060,14 @@ async function handleForgotPin() {
     const email = document.getElementById('user-email-input').value.trim().toLowerCase();
     const errorEl = document.getElementById('auth-error');
     const successEl = document.getElementById('auth-success');
-
     if (!email) {
         errorEl.innerText = "Please enter your email address first.";
         errorEl.style.display = 'block';
         return;
     }
-
     const { error } = await _supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + window.location.pathname,
-    });
+    redirectTo: "https://phx-a7-launch-pad.vercel.app/", // Force it to point to your Vercel frontend
+});
 
     if (error) {
         errorEl.innerText = error.message;
@@ -4207,7 +4222,7 @@ async function startApp() {
     const loader = document.getElementById('loading-overlay');
 
     // Detect Recovery (Forgot PIN) link
-    const isRecovery = window.location.hash.includes('type=recovery');
+const isRecovery = currentHash.includes('type=recovery') || window.isUpdateMode === true;
 
     if (isRecovery) {
         spinnerSection.style.display = 'none';

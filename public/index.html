@@ -1580,7 +1580,7 @@ body.dark-mode .phase-row {
                     
                     <button class="tool-btn" onclick="uncheckAll()" style="background: #e0e0e0; color: #333; border-color: #ccc;">Cancel</button>
                 </div>
-<button class="tool-btn" onclick="openScheduleConfigModal()" style="background: #f1f3f4; border-color: #dcdcdc; color: #555;">⚙️ Setup Config</button>
+                <button id="schedule-setup-btn" class="tool-btn" onclick="openScheduleConfigModal()" style="display: none; background: #f1f3f4; border-color: #dcdcdc; color: #555;">  Setup Config</button>
                 <span id="saveIndicator">Saved</span>
                 <button class="tool-btn" onclick="exportToPDF()" style="background: #ffffff; color: #d6281c; border-color: #d6281c; margin-left: 5px; font-weight: bold;">PDF</button>
             </div>
@@ -4274,17 +4274,22 @@ if (permissions.isAuthorized) {
         if (error) console.error("Cleanup Error:", error);
     }
     
-    // Show the Admin buttons/settings if they are an admin
     if (window.isAdmin) {
-        // Show the floating blue "Manage Access" button
-        document.getElementById('admin-share-btn').style.display = 'inline-block'; 
-        
-        // --- THE FIX: Actually show the sidebar icon ---
-        const navSettings = document.getElementById('nav-settings');
-        if (navSettings) {
-            navSettings.style.display = 'flex'; // This reveals the gear icon
-        }
-    }
+         // Show the floating blue "Manage Access" button
+         document.getElementById('admin-share-btn').style.display = 'inline-block';
+         
+         // Show the Schedule Setup Config button
+         const scheduleSetupBtn = document.getElementById('schedule-setup-btn');
+         if (scheduleSetupBtn) {
+             scheduleSetupBtn.style.display = 'inline-block';
+         }
+         
+         // --- THE FIX: Actually show the sidebar icon ---
+         const navSettings = document.getElementById('nav-settings');
+         if (navSettings) {
+             navSettings.style.display = 'flex'; // This reveals the gear icon
+         }
+     }
     
    // Continue with the rest of the launch sequence
     await fetchPHXA7dropdownoptions();

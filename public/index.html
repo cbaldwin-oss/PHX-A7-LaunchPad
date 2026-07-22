@@ -4314,6 +4314,15 @@ if (permissions.isAuthorized) {
     }
 }
 
+const myConfigUrl = "https://phx-a7-launch-pad.vercel.app/"; // Replace with your config variable
+
+const { data, error } = await _supabase.auth.signInWithOtp({
+    email: 'newuser@example.com',
+    options: {
+        emailRedirectTo: myConfigUrl // Forces Supabase to use this specific URL
+    }
+});
+
 async function processGrantAccess() {
     const emailToAdd = window.pendingGrantEmail;
     const btn = document.getElementById('grant-confirm-btn');

@@ -4214,15 +4214,24 @@ async function completeAppLaunch() {
 }
 
 async function startApp() {
-    createSections(); 
+    createSections();
     const urlParams = new URLSearchParams(window.location.search);
     const grantTarget = urlParams.get('grant');
     const spinnerSection = document.getElementById('loading-spinner-section');
     const authPrompt = document.getElementById('auth-prompt');
     const loader = document.getElementById('loading-overlay');
 
+    // --- THE FIX: Ask Google Apps Script to read the URL outside the iframe ---
+    let currentHash = window.location.hash;
+    
+    // If running in Google Apps Script, use their specific tool to find the hash
+    if (typeof google !== 'undefined' && google.script && google.script.url) {
+        currentHash = await new Promise(resolve => {
+            google.script.url.getLocation(loc => resolve(loc.hash || ""));
+        });
+    }
     // Detect Recovery (Forgot PIN) link
-const isRecovery = currentHash.includes('type=recovery') || window.isUpdateMode === true;
+    const isRecovery = currentHash.includes('type=recovery') || window.isUpdateMode === true;
 
     if (isRecovery) {
         spinnerSection.style.display = 'none';

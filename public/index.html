@@ -1499,6 +1499,11 @@ body.dark-mode .phase-row {
     </div>
 </div>
 <div id="dashboard-view" style="display: none; height: 100%; width: 100%; overflow: hidden;">
+<iframe 
+        src="shared-dashboard/index.html" 
+        style="width: 100%; height: 100%; border: none; display: block;"
+        title="CriticalArc Dashboard">
+    </iframe>
 </div>
 <div id="equipment-tracker-view" style="display: none; height: 100%; width: 100%;">
     <iframe 
@@ -1810,7 +1815,6 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     <table id="grid"></table>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="shared-dashboard/dashboard.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="settings.js"></script>
 

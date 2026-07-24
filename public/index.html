@@ -796,14 +796,6 @@
     #sidebar { top: 60px; height: calc(100vh - 60px); }
 }
 
-/* The Iframe itself */
-#streamlit-iframe {
-    width: 100%;
-    height: 100%;
-    border: none;
-    display: block; /* Removes tiny bottom gap common in iframes */
-}
-
 .dash-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -1507,16 +1499,6 @@ body.dark-mode .phase-row {
     </div>
 </div>
 <div id="dashboard-view" style="display: none; height: 100%; width: 100%; overflow: hidden;">
-    <iframe 
-        id="streamlit-iframe"
-        src="https://criticalarc-stream-cxdashboard.streamlit.app/?embed=true&embed_options=light_theme" 
-        width="100%" 
-        height="100%" 
-        frameborder="0"
-        style="width: 100%; height: 100%; border: none; margin: 0; padding: 0; display: block; overflow: hidden;"
-        allow="autoplay; encrypted-media; fullscreen"
-        allowfullscreen>
-    </iframe>
 </div>
 <div id="equipment-tracker-view" style="display: none; height: 100%; width: 100%;">
     <iframe 

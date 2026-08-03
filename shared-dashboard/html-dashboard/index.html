@@ -4647,7 +4647,7 @@ async function syncAllAssetLookups() {
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxAGGzz8TSK29Zz-nDPw72FnhqoyCkYX-OU0bW8xbZ27QYMZjqaf57GQIgdPD9Bt1It/exec';
 
-let dropdownData = { times: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
+let dropdownData = { col1: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
 
 async function fetchPHXA7dropdownoptions() {
     // 1. Fetch ALL columns at once so we can see which Assets map to which Places on the same row
@@ -4656,7 +4656,7 @@ async function fetchPHXA7dropdownoptions() {
         .select('Times, Places, Activities, Assets, Trade_Partners, Results')
         .range(0, 1000); 
 
-    const newData = { times: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
+    const newData = { col1: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
     const assetToPlaceMap = {}; // NEW: Dictionary to link Assets to Places
 
     if (!error && data) {
@@ -5710,7 +5710,7 @@ async function confirmBulkAction() {
         if (!rowDiv) continue;
         
         const rowData = {
-            times: rowDiv.querySelector(`[data-col-index="1"]`)?.value || "",
+            col1: rowDiv.querySelector(`[data-col-index="1"]`)?.value || "",
             col2: rowDiv.querySelector(`[data-col-index="2"]`)?.value || "",
             col3: rowDiv.querySelector(`[data-col-index="3"]`)?.value || "",
             col4: rowDiv.querySelector(`[data-col-index="4"]`)?.value || "",
@@ -5908,7 +5908,7 @@ async function saveRow(rowNum, dayLabel, col6Override = null) {
     const rowData = {
         id: rowNum,          // e.g., 2026042005
         day_label: dayLabel, // e.g., "2026-04-20"
-        times: document.getElementById(`${dayLabel}-r${rowNum}-c1`)?.value || "",
+        col1: document.getElementById(`${dayLabel}-r${rowNum}-c1`)?.value || "",
         col2: document.getElementById(`${dayLabel}-r${rowNum}-c2`)?.value || "",
         col3: document.getElementById(`${dayLabel}-r${rowNum}-c3`)?.value || "",
         col4: document.getElementById(`${dayLabel}-r${rowNum}-c4`)?.value || "",

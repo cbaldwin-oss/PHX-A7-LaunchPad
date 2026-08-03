@@ -4009,13 +4009,16 @@ function updateRowInUI(row) {
 
     rowEl.setAttribute('data-occupied', 'true');
 
-    // Update columns 1 through 8
-    for (let i = 1; i <= 8; i++) {
+    // Column Name Mapping
+    const dbCols = { 1: 'time', 2: 'place', 3: 'activity', 4: 'asset', 5: 'status', 6: 'trade_partners', 7: 'result', 8: 'notes', 9: 'duration' };
+
+    // Update columns 1 through 9
+    for (let i = 1; i <= 9; i++) {
         const cellId = `${row.day_label}-r${row.id}-c${i}`;
         const el = document.getElementById(cellId);
         
         if (el && el !== document.activeElement) {
-            const content = row[`col${i}`] || "";
+            const content = row[dbCols[i]] || ""; // <-- Map the number to the new name
             
            if (i === 5) {
                     // Column 5 is a status span
@@ -5245,9 +5248,11 @@ function saveCell(cell, value, colIndex, isImmediate = false) {
         // Skip saving if it's still "Checking..." or if the value hasn't actually changed
         if (currentValue.includes("Checking") || (isFailsafe && currentValue === oldValue)) return;
 
-        const updateObj = { id: parseInt(rowNum), day_label: dateId };
-        updateObj[`col${colIndex}`] = currentValue;
+        // Column Name Mapping
+        const dbCols = { 1: 'time', 2: 'place', 3: 'activity', 4: 'asset', 5: 'status', 6: 'trade_partners', 7: 'result', 8: 'notes', 9: 'duration' };
 
+        const updateObj = { id: parseInt(rowNum), day_label: dateId };
+        updateObj[dbCols[colIndex]] = currentValue; // <-- Map the number to the new name
         const { data, error } = await _supabase
             .from('PHXA7BackEndData')
             .upsert([updateObj])
@@ -5908,15 +5913,15 @@ async function saveRow(rowNum, dayLabel, col6Override = null) {
     const rowData = {
         id: rowNum,          // e.g., 2026042005
         day_label: dayLabel, // e.g., "2026-04-20"
-        col1: document.getElementById(`${dayLabel}-r${rowNum}-c1`)?.value || "",
-        col2: document.getElementById(`${dayLabel}-r${rowNum}-c2`)?.value || "",
-        col3: document.getElementById(`${dayLabel}-r${rowNum}-c3`)?.value || "",
-        col4: document.getElementById(`${dayLabel}-r${rowNum}-c4`)?.value || "",
-        col5: document.getElementById(`${dayLabel}-r${rowNum}-c5`)?.innerHTML || "", // <-- CHANGED TO innerHTML
-        col6: col6Override !== null ? col6Override : (document.getElementById(`${dayLabel}-r${rowNum}-c6`)?.getAttribute('data-selected') || ""),
-        col7: document.getElementById(`${dayLabel}-r${rowNum}-c7`)?.value || "",
-        col8: document.getElementById(`${dayLabel}-r${rowNum}-c8`)?.value || "",
-        col9: col6Override !== null ? col6Override : (document.getElementById(`${dayLabel}-r${rowNum}-c9`)?.value || "")
+        time: document.getElementById(`${dayLabel}-r${rowNum}-c1`)?.value || "",
+        place: document.getElementById(`${dayLabel}-r${rowNum}-c2`)?.value || "",
+        activity: document.getElementById(`${dayLabel}-r${rowNum}-c3`)?.value || "",
+        asset: document.getElementById(`${dayLabel}-r${rowNum}-c4`)?.value || "",
+        status: document.getElementById(`${dayLabel}-r${rowNum}-c5`)?.innerHTML || "",
+        trade_partners: col6Override !== null ? col6Override : (document.getElementById(`${dayLabel}-r${rowNum}-c6`)?.getAttribute('data-selected') || ""),
+        result: document.getElementById(`${dayLabel}-r${rowNum}-c7`)?.value || "",
+        notes: document.getElementById(`${dayLabel}-r${rowNum}-c8`)?.value || "",
+        duration: col6Override !== null ? col6Override : (document.getElementById(`${dayLabel}-r${rowNum}-c9`)?.value || "")
     };
 
     try {
@@ -6257,11 +6262,14 @@ async function loadData(isSilent = false) {
                     wrapper.setAttribute('data-occupied', 'true');
                 }
 
+                // Column Name Mapping
+                const dbCols = { 1: 'time', 2: 'place', 3: 'activity', 4: 'asset', 5: 'status', 6: 'trade_partners', 7: 'result', 8: 'notes', 9: 'duration' };
+
                 for (let col = 1; col <= 9; col++) {
                     const cellId = `${row.day_label}-r${row.id}-c${col}`;
                     const el = document.getElementById(cellId);
                     if (el && el !== document.activeElement) {
-    const content = row[`col${col}`] || "";
+    const content = row[dbCols[col]] || ""; // <-- Map the number to the new name
 
     if (col === 6) {
     el.setAttribute('data-selected', content);

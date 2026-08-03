@@ -1484,7 +1484,7 @@ body.dark-mode .phase-row {
     <div style="background: white; width: 450px; max-width: 95%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); overflow: hidden; display: flex; flex-direction: column;">
         <div style="padding: 15px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
             <h2 id="scanner-modal-title" style="margin: 0; color: #2e7d32; font-size: 18px;">Scanner</h2>
-            <button onclick="stopScanner()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999; line-height: 1;">&times;</button>
+            <button onclick="stopScanner()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999; line-height: 1;">&col1;</button>
         </div>
         <div style="padding: 20px;">
             <div id="scanner-mode-toggles" style="display: flex; gap: 10px; margin-bottom: 15px;">
@@ -1654,7 +1654,7 @@ body.dark-mode .phase-row {
 <div id="admin-panel" style="display: none; position: fixed; top: 80px; right: 30px; width: 350px; background: white; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 2000; padding: 20px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
         <h3 style="margin: 0; color: #2e7d32;">Pending Access</h3>
-        <button onclick="toggleAdminPanel()" style="background: none; border: none; cursor: pointer; font-size: 20px;">&times;</button>
+        <button onclick="toggleAdminPanel()" style="background: none; border: none; cursor: pointer; font-size: 20px;">&col1;</button>
     </div>
     <div id="request-list" style="max-height: 300px; overflow-y: auto; border-top: 1px solid #eee;">
         <p style="color: #666; font-size: 13px; text-align: center; padding: 20px;">No pending requests.</p>
@@ -4653,7 +4653,7 @@ async function fetchPHXA7dropdownoptions() {
     // 1. Fetch ALL columns at once so we can see which Assets map to which Places on the same row
     const { data, error } = await _supabase
         .from('PHXA7dropdownoptions')
-        .select('Times, Places, Activities, Assets, Trade_Partners, Results')
+        .select('col1, Places, Activities, Assets, Trade_Partners, Results')
         .range(0, 1000); 
 
     const newData = { col1: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
@@ -4661,14 +4661,14 @@ async function fetchPHXA7dropdownoptions() {
 
     if (!error && data) {
         data.forEach(row => {
-            const time = row.Times?.toString().trim();
+            const time = row.col1?.toString().trim();
             const place = row.Places?.toString().trim();
             const activity = row.Activities?.toString().trim();
             const asset = row.Assets?.toString().trim();
             const trade = row.Trade_Partners?.toString().trim();
             const result = row.Results?.toString().trim();
 
-            if (time && !newData.times.includes(time)) newData.times.push(time);
+            if (time && !newData.col1.includes(time)) newData.col1.push(time);
             if (place && !newData.col2.includes(place)) newData.col2.push(place);
             if (activity && !newData.col3.includes(activity)) newData.col3.push(activity);
             if (asset && !newData.col4.includes(asset)) newData.col4.push(asset);
@@ -4681,7 +4681,7 @@ async function fetchPHXA7dropdownoptions() {
             }
         });
         
-        newData.times.sort();
+        newData.col1.sort();
         newData.col2.sort();
         newData.col3.sort();
         newData.col4.sort();
@@ -5010,7 +5010,7 @@ function applyColumnWidths() {
 
 function initColumnResizers() {
     const resizers = document.querySelectorAll('.col-resizer');
-    let startX, startWidth1, startWidth2, times, col2, activeResizer, flexGridWidth;
+    let startX, startWidth1, startWidth2, col1, col2, activeResizer, flexGridWidth;
     
     resizers.forEach(resizer => {
         resizer.addEventListener('mousedown', (e) => {
@@ -5029,11 +5029,11 @@ function initColumnResizers() {
             
             if (colIndex === -1 || colIndex === visibleCols.length - 1) return; 
             
-            times = visibleCols[colIndex];
+            col1 = visibleCols[colIndex];
             col2 = visibleCols[colIndex + 1];
             
             startX = e.pageX;
-            startWidth1 = times.width;
+            startWidth1 = col1.width;
             startWidth2 = col2.width;
             
             // 🟢 THE FIX: Calculate the EXACT flexible pixel area 
@@ -5047,7 +5047,7 @@ function initColumnResizers() {
     });
     
     function mouseMoveHandler(e) {
-        if (!times || !col2) return;
+        if (!col1 || !col2) return;
         
         // Find how many pixels you moved the mouse
         const deltaX = e.pageX - startX;
@@ -5060,7 +5060,7 @@ function initColumnResizers() {
         
         // Ensure columns don't crush each other into negative space (min 2%)
         if (newWidth1 > 2 && newWidth2 > 2) {
-            times.width = newWidth1;
+            col1.width = newWidth1;
             col2.width = newWidth2;
             applyColumnWidths(); 
         }
@@ -6587,7 +6587,7 @@ function openBatchAddModal() {
     // Populate standard dropdowns
     const timeSelect = document.getElementById('batch-time');
     timeSelect.innerHTML = '<option value="">Select...</option>';
-    (window.dropdownData?.times || []).forEach(t => timeSelect.add(new Option(t, t)));
+    (window.dropdownData?.col1 || []).forEach(t => timeSelect.add(new Option(t, t)));
 
     // Populate Checkbox Lists
     const tradeList = document.getElementById('batch-trade-list');
@@ -6729,7 +6729,7 @@ async function processBatchAdd() {
  * E.g., "8:00 AM" -> 480, "1:00 PM" -> 780
  */
 function parseTimeValue(timeStr) {
-    if (!timeStr) return 9999; // Push empty times to the bottom
+    if (!timeStr) return 9999; // Push empty col1 to the bottom
     
     const match = timeStr.trim().match(/^(\d{1,2}):?(\d{2})?\s*(AM|PM|am|pm)?/i);
     if (!match) return 9999;

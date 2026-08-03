@@ -4647,7 +4647,7 @@ async function syncAllAssetLookups() {
 
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxAGGzz8TSK29Zz-nDPw72FnhqoyCkYX-OU0bW8xbZ27QYMZjqaf57GQIgdPD9Bt1It/exec';
 
-let dropdownData = { col1: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
+let dropdownData = { times: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
 
 async function fetchPHXA7dropdownoptions() {
     // 1. Fetch ALL columns at once so we can see which Assets map to which Places on the same row
@@ -4656,7 +4656,7 @@ async function fetchPHXA7dropdownoptions() {
         .select('Times, Places, Activities, Assets, Trade_Partners, Results')
         .range(0, 1000); 
 
-    const newData = { col1: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
+    const newData = { times: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
     const assetToPlaceMap = {}; // NEW: Dictionary to link Assets to Places
 
     if (!error && data) {
@@ -4668,7 +4668,7 @@ async function fetchPHXA7dropdownoptions() {
             const trade = row.Trade_Partners?.toString().trim();
             const result = row.Results?.toString().trim();
 
-            if (time && !newData.col1.includes(time)) newData.col1.push(time);
+            if (time && !newData.times.includes(time)) newData.times.push(time);
             if (place && !newData.col2.includes(place)) newData.col2.push(place);
             if (activity && !newData.col3.includes(activity)) newData.col3.push(activity);
             if (asset && !newData.col4.includes(asset)) newData.col4.push(asset);
@@ -4681,7 +4681,7 @@ async function fetchPHXA7dropdownoptions() {
             }
         });
         
-        newData.col1.sort();
+        newData.times.sort();
         newData.col2.sort();
         newData.col3.sort();
         newData.col4.sort();
@@ -5010,7 +5010,7 @@ function applyColumnWidths() {
 
 function initColumnResizers() {
     const resizers = document.querySelectorAll('.col-resizer');
-    let startX, startWidth1, startWidth2, col1, col2, activeResizer, flexGridWidth;
+    let startX, startWidth1, startWidth2, times, col2, activeResizer, flexGridWidth;
     
     resizers.forEach(resizer => {
         resizer.addEventListener('mousedown', (e) => {
@@ -5029,11 +5029,11 @@ function initColumnResizers() {
             
             if (colIndex === -1 || colIndex === visibleCols.length - 1) return; 
             
-            col1 = visibleCols[colIndex];
+            times = visibleCols[colIndex];
             col2 = visibleCols[colIndex + 1];
             
             startX = e.pageX;
-            startWidth1 = col1.width;
+            startWidth1 = times.width;
             startWidth2 = col2.width;
             
             // 🟢 THE FIX: Calculate the EXACT flexible pixel area 
@@ -5047,7 +5047,7 @@ function initColumnResizers() {
     });
     
     function mouseMoveHandler(e) {
-        if (!col1 || !col2) return;
+        if (!times || !col2) return;
         
         // Find how many pixels you moved the mouse
         const deltaX = e.pageX - startX;
@@ -5060,7 +5060,7 @@ function initColumnResizers() {
         
         // Ensure columns don't crush each other into negative space (min 2%)
         if (newWidth1 > 2 && newWidth2 > 2) {
-            col1.width = newWidth1;
+            times.width = newWidth1;
             col2.width = newWidth2;
             applyColumnWidths(); 
         }
@@ -5710,7 +5710,7 @@ async function confirmBulkAction() {
         if (!rowDiv) continue;
         
         const rowData = {
-            col1: rowDiv.querySelector(`[data-col-index="1"]`)?.value || "",
+            times: rowDiv.querySelector(`[data-col-index="1"]`)?.value || "",
             col2: rowDiv.querySelector(`[data-col-index="2"]`)?.value || "",
             col3: rowDiv.querySelector(`[data-col-index="3"]`)?.value || "",
             col4: rowDiv.querySelector(`[data-col-index="4"]`)?.value || "",
@@ -5908,7 +5908,7 @@ async function saveRow(rowNum, dayLabel, col6Override = null) {
     const rowData = {
         id: rowNum,          // e.g., 2026042005
         day_label: dayLabel, // e.g., "2026-04-20"
-        col1: document.getElementById(`${dayLabel}-r${rowNum}-c1`)?.value || "",
+        times: document.getElementById(`${dayLabel}-r${rowNum}-c1`)?.value || "",
         col2: document.getElementById(`${dayLabel}-r${rowNum}-c2`)?.value || "",
         col3: document.getElementById(`${dayLabel}-r${rowNum}-c3`)?.value || "",
         col4: document.getElementById(`${dayLabel}-r${rowNum}-c4`)?.value || "",
@@ -6587,7 +6587,7 @@ function openBatchAddModal() {
     // Populate standard dropdowns
     const timeSelect = document.getElementById('batch-time');
     timeSelect.innerHTML = '<option value="">Select...</option>';
-    (window.dropdownData?.col1 || []).forEach(t => timeSelect.add(new Option(t, t)));
+    (window.dropdownData?.times || []).forEach(t => timeSelect.add(new Option(t, t)));
 
     // Populate Checkbox Lists
     const tradeList = document.getElementById('batch-trade-list');

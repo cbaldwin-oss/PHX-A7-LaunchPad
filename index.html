@@ -1512,11 +1512,9 @@ body.dark-mode .phase-row {
   // Import the class we just created
   import { CriticalArcDashboard } from './dashboard.js'; 
   
-  // Initialize and mount it to the div above
-  document.addEventListener('DOMContentLoaded', () => {
-    const dashboard = new CriticalArcDashboard('launchpad-dashboard-container');
-    dashboard.mount().catch(err => console.error("Failed to load dashboard:", err));
-  });
+// Store the instance globally, but DO NOT mount it on load
+  window.caDashboardInstance = new CriticalArcDashboard('launchpad-dashboard-container');
+  window.caDashboardMounted = false;
 </script>
 </div>
 <div id="equipment-tracker-view" style="display: none; height: 100%; width: 100%;">
@@ -2181,6 +2179,11 @@ function switchMainView(viewType, btn) {
     if (viewType === 'dashboard') {
         if (dash) dash.style.display = 'block';
         if (appBody) appBody.style.width = 'calc(100% - 36px)'; 
+        // NEW: Lazy load the dashboard only when clicked
+        if (window.caDashboardInstance && !window.caDashboardMounted) {
+            window.caDashboardMounted = true;
+            window.caDashboardInstance.mount().catch(err => console.error("Dashboard error:", err));
+        }
     } else if (viewType === 'equipment') { 
         if (equipmentView) equipmentView.style.display = 'block'; 
         if (appBody) appBody.style.width = 'calc(100% - 36px)'; 

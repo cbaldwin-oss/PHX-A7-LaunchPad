@@ -858,7 +858,7 @@ function renderAll() {
 async function loadProject(pid) {
   document.getElementById('loading').style.display = 'block';
   document.getElementById('dash').style.display = 'none';
-  const resp = await fetch(`data/project_${pid}.json`);
+  const resp = await fetch(`html-dashboard/data/project_${pid}.json`);
   STATE.data = await resp.json();
   STATE.eqPhase = new Map(STATE.data.equipment.map(e => [String(e.equipment_id), e.building_phase]));
   STATE.filters = { discipline: [], contractor: [], status: [], phase: [] };
@@ -901,7 +901,7 @@ async function init() {
   };
 
   // Project list
-  const projects = await (await fetch('data/projects.json')).json();
+  const projects = await (await fetch('html-dashboard/data/projects.json')).json();
   const sel = document.getElementById('projectSelect');
   sel.innerHTML = projects.map(p => `<option value="${p.project_id}">${p.name}</option>`).join('');
   sel.onchange = () => { STATE.project = sel.value; loadProject(sel.value); };

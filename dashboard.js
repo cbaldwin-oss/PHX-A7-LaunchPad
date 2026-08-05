@@ -41,14 +41,14 @@ export class CriticalArcDashboard {
       @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=DM+Mono:wght@400;500&display=swap');
       
       .ca-wrapper { --bg: #23262B; --panel: #2D3035; --border: #3E4248; --line: #34383E; --text: #F0F0F0; --muted: #8A8F98; --green: #39B54A; --red: #E04040; --yellow: #F4B942; --blue: #4A90D9; }
-      .ca-wrapper { background: var(--bg); color: var(--text); font-family: 'Barlow', sans-serif; box-sizing: border-box; }
+      .ca-wrapper { background: var(--bg); color: var(--text); font-family: 'Barlow', sans-serif; box-sizing: border-box; height: 100%; }
       .ca-wrapper * { box-sizing: border-box; }
       .ca-wrapper a { color: inherit; }
 
-      .ca-app { display: flex; min-height: 100vh; width: 100%; }
+      .ca-app { display: flex; height: 100%; width: 100%; }
 
       /* Sidebar */
-      .ca-sidebar { width: clamp(220px, 20vw, 300px); flex: 0 0 clamp(220px, 20vw, 300px); background: var(--panel); border-right: 1px solid var(--border); padding: 20px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+      .ca-sidebar { width: clamp(220px, 20vw, 300px); flex: 0 0 clamp(220px, 20vw, 300px); background: var(--panel); border-right: 1px solid var(--border); padding: 20px; overflow-y: auto; height: 100%; }
       .ca-brand { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border-bottom: 2px solid var(--green); padding-bottom: 12px; margin-bottom: 20px; }
       .ca-brand-sub { font-size: 11px; color: var(--muted); letter-spacing: 1px; margin-top: 2px; }
       .ca-side-label { font-size: 11px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; margin: 16px 0 6px; }
@@ -77,7 +77,7 @@ export class CriticalArcDashboard {
       .ca-btn-refresh:disabled { opacity: .5; cursor: default; }
 
       /* Main Content */
-      .ca-main { flex: 1; padding: clamp(16px, 2vw, 28px) clamp(16px, 2.5vw, 36px); min-width: 0; background: var(--bg); }
+      .ca-main { flex: 1; padding: clamp(16px, 2vw, 28px) clamp(16px, 2.5vw, 36px); min-width: 0; background: var(--bg); overflow-y: auto; height: 100%; }
       .ca-page-title { font-family: 'Barlow Condensed', sans-serif; font-size: clamp(28px, 4vw, 42px); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; line-height: 1.1; color: var(--text); }
       .ca-page-sub { font-size: 14px; color: var(--muted); margin-top: 4px; letter-spacing: .5px; }
       .ca-page-meta { font-size: 12px; color: #5A5F68; margin-top: 6px; letter-spacing: .5px; }

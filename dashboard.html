@@ -351,13 +351,13 @@ function renderIssues(issues) {
     if (['low','p2','minor'].some(x => p.includes(x))) return 2; return 3; };
   pri.sort((a, b) => sev(a.key) - sev(b.key));
   const priScale = ['#E04040','#F4B942','#39B54A','#4A90D9','#8A8F98'];
-  Plotly.react('iss-priority', [{
+      Plotly.react('iss-priority', [{
     type: 'pie', hole: 0.65, labels: pri.map(d => d.key), values: pri.map(d => d.count),
     marker: { colors: pri.map((_, i) => priScale[i % priScale.length]), line: { color: C.panel, width: 2 } },
     textinfo: 'none', hovertemplate: '<b>%{label}</b><br>%{value} (%{percent})<extra></extra>',
   }], baseLayout({ title: { text: 'All Issues by Priority', font: { color: C.muted, family: COND, size: 12 } },
-    showlegend: true, legend: { orientation: 'v', x: 1.02, y: 0.5, font: { color: C.muted } },
-    margin: { t: 40, b: 10, l: 10, r: 120 } }), CFG);
+    showlegend: true, legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.2, yanchor: 'top', font: { color: C.muted } },
+    margin: { t: 40, b: 60, l: 10, r: 10 } }), CFG);
 
   // Status bar
   const statusColors = { Open:'#E04040','In Progress':'#4A90D9','Pending Review':'#F4B942',
@@ -416,10 +416,10 @@ function renderBurndown(issues) {
     { type: 'bar', name: 'Closed', x: weeks, y: weeklyClosed, marker: { color: C.green } },
     { type: 'scatter', mode: 'lines+markers', name: 'Open backlog', x: weeks, y: openY,
       line: { color: C.red, width: 2 }, marker: { size: 5 } },
-  ], baseLayout({ barmode: 'group', legend: { orientation: 'h', y: 1.08, x: 0 },
+  ], baseLayout({ barmode: 'group', legend: { orientation: 'h', y: 1.15, yanchor: 'bottom', x: 0 },
     xaxis: { gridcolor: C.border, tickfont: { color: C.muted } },
     yaxis: { title: 'Issues', gridcolor: C.border, tickfont: { color: C.muted } },
-    margin: { t: 30, b: 30, l: 40, r: 10 } }), CFG);
+    margin: { t: 50, b: 30, l: 40, r: 10 } }), CFG);
 
   const last3 = weeklyClosed.slice(-3);
   const avg = last3.length ? last3.reduce((a, b) => a + b, 0) / last3.length : 0;
@@ -494,8 +494,8 @@ function renderChecklists(cl) {
       title: { text: lv, font: { size: 16, color: levelColors[lv] || C.text, family: COND }, x: 0.5, xanchor: 'center' },
       annotations: [{ text: `<b>${sub.length.toLocaleString()}</b>`, x: 0.5, y: 0.5, showarrow: false,
         font: { size: 20, color: C.text, family: COND } }],
-      showlegend: true, legend: { orientation: 'h', y: -0.05, x: 0.5, xanchor: 'center', font: { size: 10, color: C.muted } },
-      margin: { t: 40, b: 10, l: 10, r: 10 } }), CFG);
+      showlegend: true, legend: { orientation: 'h', y: -0.15, yanchor: 'top', x: 0.5, xanchor: 'center', font: { size: 10, color: C.muted } },
+      margin: { t: 40, b: 70, l: 10, r: 10 } }), CFG);
   });
 
   // Completion by discipline (stacked hbar)

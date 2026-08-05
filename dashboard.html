@@ -79,7 +79,10 @@
     font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px;
     letter-spacing: .5px; padding: 8px 16px; cursor: pointer; }
   .tab.active { background: var(--line); color: var(--green); }
-  .tabpage { display: none; } .tabpage.active { display: block; }
+  
+  /* FIXED TABS CSS to prevent Plotly legend truncation */
+  .tabpage { height: 0; overflow: hidden; visibility: hidden; } 
+  .tabpage.active { height: auto; overflow: visible; visibility: visible; }
 
   .section-header { font-family: 'Barlow Condensed', sans-serif; font-size: 12px;
     font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--green);
@@ -100,7 +103,6 @@
 
   .grid2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 16px; }
   @media (max-width: 900px) { .grid2 { grid-template-columns: minmax(0,1fr); } }
-  /* Let Plotly charts shrink to their grid track instead of blowing it out. */
   .kpi-row > *, .grid2 > * { min-width: 0; }
 
   /* ── Responsive: collapse sidebar to a top bar on narrow screens ── */
@@ -162,7 +164,7 @@
 
   <main class="main">
     <div id="loading">Loading data…</div>
-    <div id="dash" style="display:none;">
+    <div id="dash" style="visibility: hidden; height: 0; overflow: hidden;">
       <div class="page-title" id="pageTitle"></div>
       <div class="page-sub">Commissioning Progress Dashboard</div>
       <div class="page-meta" id="pageMeta"></div>
@@ -285,7 +287,6 @@ function renderIssues(issues) {
     kpi('Watch · 30–60 Days', esc30.length, 'kpi-blue', 'aging') +
     kpi('High Priority', highPri.length, 'kpi-red', 'open &amp; high') + '</div>';
 
-  // INCREASE HEIGHT TO ACCOMMODATE VERTICAL LEGEND BELOW CHART
   html += section('Issue Burn-Down &amp; Projection') + chartBox('iss-burndown', 420) +
     '<div class="caption" id="iss-burncap"></div>';
 
@@ -299,7 +300,6 @@ function renderIssues(issues) {
        <input type="range" id="iss-thresh" min="0" max="180" step="5" value="${ISS_THRESH}" /></div>
      <div id="iss-escalation"></div>`;
 
-  // Open issues detail
   html += section('Open Issues Detail');
   const openDetail = issues.filter(i => i.status !== 'Closed');
   if (openDetail.length) {
@@ -314,7 +314,6 @@ function renderIssues(issues) {
       .map(k => ({ k, label: k })), rows);
   } else { html += `<div class="ok">✅ No open issues with current filters.</div>`; }
 
-  // View all issues
   const allRows = issues.map(i => ({
     'Issue #': i.name, Priority: i.priority, Status: i.status, Division: i.discipline,
     'Assigned To': fmtAssigned(i), 'Date Created': fmtDate(i.date_created),
@@ -336,7 +335,6 @@ function renderIssues(issues) {
     renderEscalation();
   });
 
-  // Priority donut (Stacked vertically at bottom left)
   const pri = groupSize(issues, 'priority').filter(d => !isBad(d.key));
   const sev = (p) => { p = p.toLowerCase();
     if (['critical','p0','high'].some(x => p.includes(x))) return 0;
@@ -355,7 +353,6 @@ function renderIssues(issues) {
     margin: { t: 40, b: 120, l: 10, r: 10 }
   }), CFG);
 
-  // Status bar
   const statusColors = { Open:'#E04040','In Progress':'#4A90D9','Pending Review':'#F4B942',
     'Pending Verification':'#F4B942', Closed:'#39B54A', Void:'#8A8F98' };
   const st = groupSize(issues, 'status');
@@ -364,7 +361,6 @@ function renderIssues(issues) {
     { title: { text: 'All Issues by Status', font: { color: C.muted, family: COND, size: 12 } },
       margin: { t: 40, b: 40, l: 10, r: 10 } });
 
-  // Contractor (top 15)
   const con = groupSize(issues, 'assigned_company').sort((a, b) => b.count - a.count).slice(0, 15);
   plot('iss-contractor', [{ type: 'bar', x: con.map(d => d.key), y: con.map(d => d.count),
     marker: { color: con.map(d => d.count), colorscale: 'Blues' } }],
@@ -404,7 +400,6 @@ function renderBurndown(issues) {
     cumC += cMap.get(w) || 0; cumX += xMap.get(w) || 0;
     openY.push(cumC - cumX); weeklyClosed.push(xMap.get(w) || 0); weeklyCreated.push(cMap.get(w) || 0);
   }
-  // Full-width chart: Stacked vertically at bottom left
   Plotly.react('iss-burndown', [
     { type: 'bar', name: 'Opened', x: weeks, y: weeklyCreated, marker: { color: C.border } },
     { type: 'bar', name: 'Closed', x: weeks, y: weeklyClosed, marker: { color: C.green } },
@@ -463,7 +458,6 @@ function renderChecklists(cl) {
   const levelVals = new Set(cl.map(c => c.level));
   const active = levelsOrdered.filter(lv => levelVals.has(lv));
 
-  // INCREASE HEIGHT
   let html = section('Checklist Status by Level') +
     `<div class="kpi-row" style="grid-template-columns:repeat(${active.length},minmax(0,1fr))">` +
     active.map((lv, i) => chartBox(`cl-donut-${i}`, 420)).join('') + '</div>';
@@ -478,7 +472,6 @@ function renderChecklists(cl) {
     'GC to Verify':'#4A90D9','Finished':'#39B54A' };
   const levelColors = { L2:'#7F77DD', L3:'#1D9E75', L4:'#5DCAA5', FAT:'#85B7EB' };
 
-  // Grid-constrained donuts: Stacked vertically at bottom left
   active.forEach((lv, i) => {
     const sub = cl.filter(c => c.level === lv);
     const sc = groupSize(sub, 'status');
@@ -504,7 +497,6 @@ function renderChecklists(cl) {
     return { discipline: d, total: rows.length, done, remaining: rows.length - done,
       pct: rows.length ? +(done / rows.length * 100).toFixed(1) : 0 };
   }).sort((a, b) => a.total - b.total);
-  // Full-width chart: Stacked vertically at bottom left
   plot('cl-disc', [
     { type: 'bar', orientation: 'h', y: dc.map(d => d.discipline), x: dc.map(d => d.done), name: 'Completed',
       marker: { color: C.green }, text: dc.map(d => d.done > 0 ? `${d.done} (${d.pct}%)` : ''),
@@ -525,7 +517,6 @@ function renderChecklists(cl) {
       textposition: 'inside', textfont: { color: '#23262B', family: FONT },
       hovertemplate: `${d}: %{x}<extra></extra>` };
   });
-  // Full-width chart: Stacked vertically at bottom left
   plot('cl-leveldisc', ldTraces, { barmode: 'stack',
     yaxis: { categoryorder: 'array', categoryarray: [...active].reverse(), tickfont: { color: C.text, size: 13 }, automargin: true },
     legend: { orientation: 'v', y: -0.2, yanchor: 'top', x: 0, xanchor: 'left' },
@@ -539,7 +530,6 @@ function renderChecklists(cl) {
     y: topCos.map(co => openCl.filter(c => c.assigned_company === co && c.level === lv).length),
     marker: { color: levelColors[lv] || C.muted },
   }));
-  // Full-width chart: Stacked vertically at bottom left
   plot('cl-company', coTraces, { barmode: 'group',
     xaxis: { tickangle: -35, tickfont: { color: C.muted }, automargin: true },
     yaxis: { gridcolor: C.border, tickfont: { color: C.muted }, automargin: true },
@@ -590,7 +580,6 @@ function renderTests(tests, issues) {
   let html = section('Functional Test Summary') + '<div class="kpi-row">' +
     kpi('Total Tests', total, 'kpi-white') + kpi('Passed', passed, 'kpi-green') +
     kpi('Failed', failed, 'kpi-red') + kpi('Not Started', notStarted, 'kpi-white') + '</div>';
-  // INCREASE HEIGHT
   html += `<div class="grid2" style="margin-top:16px">
     <div>${section('Tests by Status')}${chartBox('ts-status', 400)}</div>
     <div>${section('Pass Rate')}${chartBox('ts-gauge', 360)}</div></div>`;
@@ -611,7 +600,6 @@ function renderTests(tests, issues) {
 
   const tsColors = { Passed:'#39B54A', Failed:'#E04040', 'Not Started':'#3E4248', 'In Progress':'#4A90D9' };
   const sc = groupSize(tests, 'status');
-  // Grid-constrained donut: Stacked vertically at bottom left
   Plotly.react('ts-status', [{ type: 'pie', hole: 0.65, labels: sc.map(d => d.key), values: sc.map(d => d.count),
     marker: { colors: sc.map(d => tsColors[d.key] || C.muted) }, textinfo: 'percent',
     textfont: { size: 11, color: C.text, family: FONT }, hovertemplate: '%{label}: %{value}<extra></extra>' }],
@@ -630,7 +618,6 @@ function renderTests(tests, issues) {
   const unitOf = (a) => { const m = String(a || '').match(/^([A-Za-z]+\d+)/); return m ? m[1] : null; };
   const units = uniq(tests.map(t => unitOf(t.asset_name)).filter(Boolean)).sort();
   const byUnit = (st) => units.map(u => tests.filter(t => unitOf(t.asset_name) === u && t.status === st).length);
-  // Full-width chart: Stacked vertically at bottom left
   plot('ts-unit', [
     { type: 'bar', name: 'Passed', x: units, y: byUnit('Passed'), marker: { color: C.green } },
     { type: 'bar', name: 'Failed', x: units, y: byUnit('Failed'), marker: { color: C.red } },
@@ -643,7 +630,6 @@ function renderTests(tests, issues) {
     const p = rows.filter(t => t.status === 'Passed').length, f = rows.filter(t => t.status === 'Failed').length;
     return { co, total: rows.length, passed: p, failed: f, other: rows.length - p - f };
   }).sort((a, b) => a.total - b.total);
-  // Full-width chart: Stacked vertically at bottom left
   plot('ts-contractor', [
     { type: 'bar', orientation: 'h', name: 'Passed', y: cos.map(d => d.co), x: cos.map(d => d.passed), marker: { color: C.green } },
     { type: 'bar', orientation: 'h', name: 'Failed', y: cos.map(d => d.co), x: cos.map(d => d.failed), marker: { color: C.red } },
@@ -848,8 +834,12 @@ function renderAll() {
 }
 
 async function loadProject(pid) {
+  // Use visibility rendering fixes rather than 'display: none'
   document.getElementById('loading').style.display = 'block';
-  document.getElementById('dash').style.display = 'none';
+  document.getElementById('dash').style.visibility = 'hidden';
+  document.getElementById('dash').style.height = '0';
+  document.getElementById('dash').style.overflow = 'hidden';
+  
   const resp = await fetch(`shared-dashboard/html-dashboard/data/project_${pid}.json`);
   STATE.data = await resp.json();
   STATE.eqPhase = new Map(STATE.data.equipment.map(e => [String(e.equipment_id), e.building_phase]));
@@ -857,8 +847,12 @@ async function loadProject(pid) {
   EQ_FILTER = { bldg: 'All', floor: 'All' };
   rebuildFilterOptions();
   renderAll();
+  
+  // Expose container back to the front
   document.getElementById('loading').style.display = 'none';
-  document.getElementById('dash').style.display = 'block';
+  document.getElementById('dash').style.visibility = 'visible';
+  document.getElementById('dash').style.height = 'auto';
+  document.getElementById('dash').style.overflow = 'visible';
 }
 
 async function init() {

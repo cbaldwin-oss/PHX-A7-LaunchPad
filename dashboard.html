@@ -285,11 +285,12 @@ function renderIssues(issues) {
     kpi('Watch · 30–60 Days', esc30.length, 'kpi-blue', 'aging') +
     kpi('High Priority', highPri.length, 'kpi-red', 'open &amp; high') + '</div>';
 
-  html += section('Issue Burn-Down &amp; Projection') + chartBox('iss-burndown', 360) +
+  // INCREASE HEIGHT TO ACCOMMODATE VERTICAL LEGEND BELOW CHART
+  html += section('Issue Burn-Down &amp; Projection') + chartBox('iss-burndown', 420) +
     '<div class="caption" id="iss-burncap"></div>';
 
   html += section('Issue Breakdown') +
-    `<div class="grid2">${chartBox('iss-priority', 380)}${chartBox('iss-status', 380)}</div>`;
+    `<div class="grid2">${chartBox('iss-priority', 400)}${chartBox('iss-status', 380)}</div>`;
   html += section('Issues by Contractor') + chartBox('iss-contractor', 400);
 
   html += section('Escalation by Contractor') +
@@ -335,7 +336,7 @@ function renderIssues(issues) {
     renderEscalation();
   });
 
-  // Priority donut (Grid-constrained: Stacked vertically AT THE BOTTOM)
+  // Priority donut (Stacked vertically at bottom left)
   const pri = groupSize(issues, 'priority').filter(d => !isBad(d.key));
   const sev = (p) => { p = p.toLowerCase();
     if (['critical','p0','high'].some(x => p.includes(x))) return 0;
@@ -350,8 +351,8 @@ function renderIssues(issues) {
   }], baseLayout({
     title: { text: 'All Issues by Priority', font: { color: C.muted, family: COND, size: 12 } },
     showlegend: true,
-    legend: { orientation: 'v', y: -0.1, yanchor: 'top', x: 0.5, xanchor: 'center' },
-    margin: { t: 40, b: 150, l: 10, r: 10 }
+    legend: { orientation: 'v', y: -0.1, yanchor: 'top', x: 0, xanchor: 'left' },
+    margin: { t: 40, b: 120, l: 10, r: 10 }
   }), CFG);
 
   // Status bar
@@ -403,7 +404,7 @@ function renderBurndown(issues) {
     cumC += cMap.get(w) || 0; cumX += xMap.get(w) || 0;
     openY.push(cumC - cumX); weeklyClosed.push(xMap.get(w) || 0); weeklyCreated.push(cMap.get(w) || 0);
   }
-  // Full-width chart: Stacked vertically ON THE RIGHT
+  // Full-width chart: Stacked vertically at bottom left
   Plotly.react('iss-burndown', [
     { type: 'bar', name: 'Opened', x: weeks, y: weeklyCreated, marker: { color: C.border } },
     { type: 'bar', name: 'Closed', x: weeks, y: weeklyClosed, marker: { color: C.green } },
@@ -411,10 +412,10 @@ function renderBurndown(issues) {
       line: { color: C.red, width: 2 }, marker: { size: 5 } },
   ], baseLayout({
     barmode: 'group',
-    legend: { orientation: 'v', x: 1.02, y: 1, xanchor: 'left', yanchor: 'top' },
+    legend: { orientation: 'v', y: -0.15, yanchor: 'top', x: 0, xanchor: 'left' },
     xaxis: { gridcolor: C.border, tickfont: { color: C.muted } },
     yaxis: { title: 'Issues', gridcolor: C.border, tickfont: { color: C.muted } },
-    margin: { t: 40, b: 30, l: 40, r: 120 }
+    margin: { t: 40, b: 100, l: 40, r: 10 }
   }), CFG);
 
   const last3 = weeklyClosed.slice(-3);
@@ -462,12 +463,13 @@ function renderChecklists(cl) {
   const levelVals = new Set(cl.map(c => c.level));
   const active = levelsOrdered.filter(lv => levelVals.has(lv));
 
+  // INCREASE HEIGHT
   let html = section('Checklist Status by Level') +
     `<div class="kpi-row" style="grid-template-columns:repeat(${active.length},minmax(0,1fr))">` +
-    active.map((lv, i) => chartBox(`cl-donut-${i}`, 360)).join('') + '</div>';
-  html += section('Completion by Discipline') + chartBox('cl-disc', 300);
-  html += section('Checklists by Level &amp; Discipline') + chartBox('cl-leveldisc', 360);
-  html += section('Open Checklists by Company &amp; Level') + chartBox('cl-company', 400);
+    active.map((lv, i) => chartBox(`cl-donut-${i}`, 420)).join('') + '</div>';
+  html += section('Completion by Discipline') + chartBox('cl-disc', 400);
+  html += section('Checklists by Level &amp; Discipline') + chartBox('cl-leveldisc', 420);
+  html += section('Open Checklists by Company &amp; Level') + chartBox('cl-company', 460);
   html += section('Completion by Contractor') + '<div id="cl-contractor-table"></div>';
   html += '<div id="cl-pending"></div>';
   root.innerHTML = html;
@@ -476,7 +478,7 @@ function renderChecklists(cl) {
     'GC to Verify':'#4A90D9','Finished':'#39B54A' };
   const levelColors = { L2:'#7F77DD', L3:'#1D9E75', L4:'#5DCAA5', FAT:'#85B7EB' };
 
-  // Grid-constrained donuts: Stacked vertically AT THE BOTTOM
+  // Grid-constrained donuts: Stacked vertically at bottom left
   active.forEach((lv, i) => {
     const sub = cl.filter(c => c.level === lv);
     const sc = groupSize(sub, 'status');
@@ -490,8 +492,8 @@ function renderChecklists(cl) {
       annotations: [{ text: `<b>${sub.length.toLocaleString()}</b>`, x: 0.5, y: 0.5, showarrow: false,
         font: { size: 20, color: C.text, family: COND } }],
       showlegend: true,
-      legend: { orientation: 'v', y: -0.1, yanchor: 'top', x: 0.5, xanchor: 'center' },
-      margin: { t: 40, b: 150, l: 5, r: 5 }
+      legend: { orientation: 'v', y: -0.1, yanchor: 'top', x: 0, xanchor: 'left' },
+      margin: { t: 30, b: 140, l: 5, r: 5 }
     }), CFG);
   });
 
@@ -502,7 +504,7 @@ function renderChecklists(cl) {
     return { discipline: d, total: rows.length, done, remaining: rows.length - done,
       pct: rows.length ? +(done / rows.length * 100).toFixed(1) : 0 };
   }).sort((a, b) => a.total - b.total);
-  // Full-width chart: Stacked vertically ON THE RIGHT
+  // Full-width chart: Stacked vertically at bottom left
   plot('cl-disc', [
     { type: 'bar', orientation: 'h', y: dc.map(d => d.discipline), x: dc.map(d => d.done), name: 'Completed',
       marker: { color: C.green }, text: dc.map(d => d.done > 0 ? `${d.done} (${d.pct}%)` : ''),
@@ -510,8 +512,8 @@ function renderChecklists(cl) {
     { type: 'bar', orientation: 'h', y: dc.map(d => d.discipline), x: dc.map(d => d.remaining), name: 'Remaining',
       marker: { color: C.border }, text: dc.map(d => String(d.total)), textposition: 'outside',
       textfont: { color: C.muted, family: FONT } },
-  ], { barmode: 'stack', legend: { orientation: 'v', x: 1.02, y: 1, xanchor: 'left', yanchor: 'top' },
-    yaxis: { tickfont: { color: C.muted, size: 10 }, automargin: true }, margin: { t: 40, b: 40, l: 10, r: 120 } });
+  ], { barmode: 'stack', legend: { orientation: 'v', y: -0.2, yanchor: 'top', x: 0, xanchor: 'left' },
+    yaxis: { tickfont: { color: C.muted, size: 10 }, automargin: true }, margin: { t: 10, b: 100, l: 10, r: 40 } });
 
   const discColors = { Mechanical:'#E74C3C', Electrical:'#F5A623',
     'Electrical Power Monitoring System':'#4A90D9', 'Fire Protection':'#39B54A' };
@@ -523,11 +525,11 @@ function renderChecklists(cl) {
       textposition: 'inside', textfont: { color: '#23262B', family: FONT },
       hovertemplate: `${d}: %{x}<extra></extra>` };
   });
-  // Full-width chart: Stacked vertically ON THE RIGHT
+  // Full-width chart: Stacked vertically at bottom left
   plot('cl-leveldisc', ldTraces, { barmode: 'stack',
     yaxis: { categoryorder: 'array', categoryarray: [...active].reverse(), tickfont: { color: C.text, size: 13 }, automargin: true },
-    legend: { orientation: 'v', x: 1.02, y: 1, xanchor: 'left', yanchor: 'top' },
-    margin: { t: 40, b: 20, l: 10, r: 180 } });
+    legend: { orientation: 'v', y: -0.2, yanchor: 'top', x: 0, xanchor: 'left' },
+    margin: { t: 40, b: 120, l: 10, r: 20 } });
 
   const openCl = cl.filter(c => !COMPLETE.includes(c.status) && active.includes(c.level));
   const coTotals = groupSize(openCl, 'assigned_company').sort((a, b) => b.count - a.count).slice(0, 10);
@@ -537,12 +539,12 @@ function renderChecklists(cl) {
     y: topCos.map(co => openCl.filter(c => c.assigned_company === co && c.level === lv).length),
     marker: { color: levelColors[lv] || C.muted },
   }));
-  // Full-width chart: Stacked vertically ON THE RIGHT
+  // Full-width chart: Stacked vertically at bottom left
   plot('cl-company', coTraces, { barmode: 'group',
     xaxis: { tickangle: -35, tickfont: { color: C.muted }, automargin: true },
     yaxis: { gridcolor: C.border, tickfont: { color: C.muted }, automargin: true },
-    legend: { orientation: 'v', x: 1.02, y: 1, xanchor: 'left', yanchor: 'top' }, 
-    margin: { t: 40, b: 90, l: 10, r: 120 } });
+    legend: { orientation: 'v', y: -0.3, yanchor: 'top', x: 0, xanchor: 'left' }, 
+    margin: { t: 40, b: 160, l: 10, r: 10 } });
 
   const unassigned = ['not assigned yet','not assigned','','nan','none'];
   const classify = (c) => {
@@ -588,11 +590,12 @@ function renderTests(tests, issues) {
   let html = section('Functional Test Summary') + '<div class="kpi-row">' +
     kpi('Total Tests', total, 'kpi-white') + kpi('Passed', passed, 'kpi-green') +
     kpi('Failed', failed, 'kpi-red') + kpi('Not Started', notStarted, 'kpi-white') + '</div>';
+  // INCREASE HEIGHT
   html += `<div class="grid2" style="margin-top:16px">
-    <div>${section('Tests by Status')}${chartBox('ts-status', 360)}</div>
+    <div>${section('Tests by Status')}${chartBox('ts-status', 400)}</div>
     <div>${section('Pass Rate')}${chartBox('ts-gauge', 360)}</div></div>`;
-  html += section('Results by Equipment Unit') + chartBox('ts-unit', 380);
-  html += section('Results by Contractor') + chartBox('ts-contractor', 360);
+  html += section('Results by Equipment Unit') + chartBox('ts-unit', 420);
+  html += section('Results by Contractor') + chartBox('ts-contractor', 420);
   html += section('Test Attempt Concentration') +
     `<div class="caption">More attempts = more re-testing effort (and burn). Darker cells are being run repeatedly.</div>` +
     chartBox('ts-heat', 340);
@@ -608,14 +611,14 @@ function renderTests(tests, issues) {
 
   const tsColors = { Passed:'#39B54A', Failed:'#E04040', 'Not Started':'#3E4248', 'In Progress':'#4A90D9' };
   const sc = groupSize(tests, 'status');
-  // Grid-constrained donut: Stacked vertically AT THE BOTTOM
+  // Grid-constrained donut: Stacked vertically at bottom left
   Plotly.react('ts-status', [{ type: 'pie', hole: 0.65, labels: sc.map(d => d.key), values: sc.map(d => d.count),
     marker: { colors: sc.map(d => tsColors[d.key] || C.muted) }, textinfo: 'percent',
     textfont: { size: 11, color: C.text, family: FONT }, hovertemplate: '%{label}: %{value}<extra></extra>' }],
     baseLayout({ annotations: [{ text: `<b>${total}</b>`, x: 0.5, y: 0.5, showarrow: false,
       font: { size: 22, color: C.text, family: COND } }], showlegend: true,
-      legend: { orientation: 'v', y: -0.1, yanchor: 'top', x: 0.5, xanchor: 'center' },
-      margin: { t: 40, b: 150, l: 10, r: 10 } }), CFG);
+      legend: { orientation: 'v', y: -0.1, yanchor: 'top', x: 0, xanchor: 'left' },
+      margin: { t: 10, b: 120, l: 10, r: 10 } }), CFG);
 
   Plotly.react('ts-gauge', [{ type: 'indicator', mode: 'gauge+number', value: +passRate.toFixed(1),
     number: { suffix: '%', font: { size: 36, color: C.text, family: COND } },
@@ -627,27 +630,27 @@ function renderTests(tests, issues) {
   const unitOf = (a) => { const m = String(a || '').match(/^([A-Za-z]+\d+)/); return m ? m[1] : null; };
   const units = uniq(tests.map(t => unitOf(t.asset_name)).filter(Boolean)).sort();
   const byUnit = (st) => units.map(u => tests.filter(t => unitOf(t.asset_name) === u && t.status === st).length);
-  // Full-width chart: Stacked vertically ON THE RIGHT
+  // Full-width chart: Stacked vertically at bottom left
   plot('ts-unit', [
     { type: 'bar', name: 'Passed', x: units, y: byUnit('Passed'), marker: { color: C.green } },
     { type: 'bar', name: 'Failed', x: units, y: byUnit('Failed'), marker: { color: C.red } },
     { type: 'bar', name: 'Not Started', x: units, y: byUnit('Not Started'), marker: { color: C.border } },
-  ], { barmode: 'stack', legend: { orientation: 'v', x: 1.02, y: 1, xanchor: 'left', yanchor: 'top' }, 
-       margin: { t: 40, b: 40, l: 10, r: 120 } });
+  ], { barmode: 'stack', legend: { orientation: 'v', y: -0.2, yanchor: 'top', x: 0, xanchor: 'left' }, 
+       margin: { t: 40, b: 120, l: 10, r: 10 } });
 
   const cos = uniq(tests.map(t => t.assigned_company)).map(co => {
     const rows = tests.filter(t => t.assigned_company === co);
     const p = rows.filter(t => t.status === 'Passed').length, f = rows.filter(t => t.status === 'Failed').length;
     return { co, total: rows.length, passed: p, failed: f, other: rows.length - p - f };
   }).sort((a, b) => a.total - b.total);
-  // Full-width chart: Stacked vertically ON THE RIGHT
+  // Full-width chart: Stacked vertically at bottom left
   plot('ts-contractor', [
     { type: 'bar', orientation: 'h', name: 'Passed', y: cos.map(d => d.co), x: cos.map(d => d.passed), marker: { color: C.green } },
     { type: 'bar', orientation: 'h', name: 'Failed', y: cos.map(d => d.co), x: cos.map(d => d.failed), marker: { color: C.red } },
     { type: 'bar', orientation: 'h', name: 'Not Started / In Progress', y: cos.map(d => d.co), x: cos.map(d => d.other), marker: { color: C.border } },
-  ], { barmode: 'stack', legend: { orientation: 'v', x: 1.02, y: 1, xanchor: 'left', yanchor: 'top' },
-    yaxis: { tickfont: { color: C.text, size: 11 } }, margin: { t: 40, b: 20, l: 10, r: 180 },
-    height: Math.max(240, cos.length * 60) });
+  ], { barmode: 'stack', legend: { orientation: 'v', y: -0.2, yanchor: 'top', x: 0, xanchor: 'left' },
+    yaxis: { tickfont: { color: C.text, size: 11 } }, margin: { t: 40, b: 120, l: 10, r: 40 },
+    height: Math.max(380, cos.length * 60) });
 
   const atts = uniq(tests.map(t => +t.attempt_count || 0).filter(n => n > 0)).sort((a, b) => a - b);
   const heatUnits = uniq(tests.map(t => unitOf(t.asset_name)).filter(Boolean)).sort();

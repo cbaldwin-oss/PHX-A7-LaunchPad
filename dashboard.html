@@ -351,13 +351,13 @@ function renderIssues(issues) {
     if (['low','p2','minor'].some(x => p.includes(x))) return 2; return 3; };
   pri.sort((a, b) => sev(a.key) - sev(b.key));
   const priScale = ['#E04040','#F4B942','#39B54A','#4A90D9','#8A8F98'];
-      Plotly.react('iss-priority', [{
+  Plotly.react('iss-priority', [{
     type: 'pie', hole: 0.65, labels: pri.map(d => d.key), values: pri.map(d => d.count),
     marker: { colors: pri.map((_, i) => priScale[i % priScale.length]), line: { color: C.panel, width: 2 } },
     textinfo: 'none', hovertemplate: '<b>%{label}</b><br>%{value} (%{percent})<extra></extra>',
   }], baseLayout({ title: { text: 'All Issues by Priority', font: { color: C.muted, family: COND, size: 12 } },
-    showlegend: true, legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.2, yanchor: 'top', font: { color: C.muted } },
-    margin: { t: 40, b: 60, l: 10, r: 10 } }), CFG);
+    showlegend: true, legend: { orientation: 'v', y: -0.2, yanchor: 'top', x: 0.5, xanchor: 'center', font: { color: C.muted } },
+    margin: { t: 40, b: 120, l: 10, r: 10 } }), CFG);
 
   // Status bar
   const statusColors = { Open:'#E04040','In Progress':'#4A90D9','Pending Review':'#F4B942',
@@ -416,10 +416,10 @@ function renderBurndown(issues) {
     { type: 'bar', name: 'Closed', x: weeks, y: weeklyClosed, marker: { color: C.green } },
     { type: 'scatter', mode: 'lines+markers', name: 'Open backlog', x: weeks, y: openY,
       line: { color: C.red, width: 2 }, marker: { size: 5 } },
-  ], baseLayout({ barmode: 'group', legend: { orientation: 'h', y: 1.15, yanchor: 'bottom', x: 0 },
+  ], baseLayout({ barmode: 'group', legend: { orientation: 'h', y: 1.2, yanchor: 'bottom', x: 0 },
     xaxis: { gridcolor: C.border, tickfont: { color: C.muted } },
     yaxis: { title: 'Issues', gridcolor: C.border, tickfont: { color: C.muted } },
-    margin: { t: 50, b: 30, l: 40, r: 10 } }), CFG);
+    margin: { t: 80, b: 30, l: 40, r: 10 } }), CFG);
 
   const last3 = weeklyClosed.slice(-3);
   const avg = last3.length ? last3.reduce((a, b) => a + b, 0) / last3.length : 0;
@@ -494,8 +494,8 @@ function renderChecklists(cl) {
       title: { text: lv, font: { size: 16, color: levelColors[lv] || C.text, family: COND }, x: 0.5, xanchor: 'center' },
       annotations: [{ text: `<b>${sub.length.toLocaleString()}</b>`, x: 0.5, y: 0.5, showarrow: false,
         font: { size: 20, color: C.text, family: COND } }],
-      showlegend: true, legend: { orientation: 'h', y: -0.15, yanchor: 'top', x: 0.5, xanchor: 'center', font: { size: 10, color: C.muted } },
-      margin: { t: 40, b: 70, l: 10, r: 10 } }), CFG);
+      showlegend: true, legend: { orientation: 'v', y: -0.15, yanchor: 'top', x: 0.5, xanchor: 'center', font: { size: 10, color: C.muted } },
+      margin: { t: 40, b: 120, l: 10, r: 10 } }), CFG);
   });
 
   // Completion by discipline (stacked hbar)
@@ -529,8 +529,8 @@ function renderChecklists(cl) {
   });
   plot('cl-leveldisc', ldTraces, { barmode: 'stack',
     yaxis: { categoryorder: 'array', categoryarray: [...active].reverse(), tickfont: { color: C.text, size: 13 }, automargin: true },
-    legend: { orientation: 'h', y: 1.18, x: 0, font: { size: 10, color: C.muted } },
-    margin: { t: 44, b: 20, l: 10, r: 20 } });
+    legend: { orientation: 'h', y: 1.25, yanchor: 'bottom', x: 0, font: { size: 10, color: C.muted } },
+    margin: { t: 80, b: 20, l: 10, r: 20 } });
 
   // Open checklists by company & level (grouped, top 10 companies)
   const openCl = cl.filter(c => !COMPLETE.includes(c.status) && active.includes(c.level));
@@ -616,8 +616,8 @@ function renderTests(tests, issues) {
     textfont: { size: 12, color: C.text, family: FONT }, hovertemplate: '%{label}: %{value}<extra></extra>' }],
     baseLayout({ annotations: [{ text: `<b>${total}</b>`, x: 0.5, y: 0.5, showarrow: false,
       font: { size: 22, color: C.text, family: COND } }], showlegend: true,
-      legend: { orientation: 'h', y: -0.05, x: 0.5, xanchor: 'center', font: { color: C.muted } },
-      margin: { t: 10, b: 10, l: 10, r: 10 } }), CFG);
+      legend: { orientation: 'v', y: -0.15, yanchor: 'top', x: 0.5, xanchor: 'center', font: { color: C.muted } },
+      margin: { t: 10, b: 120, l: 10, r: 10 } }), CFG);
 
   Plotly.react('ts-gauge', [{ type: 'indicator', mode: 'gauge+number', value: +passRate.toFixed(1),
     number: { suffix: '%', font: { size: 36, color: C.text, family: COND } },
@@ -634,7 +634,7 @@ function renderTests(tests, issues) {
     { type: 'bar', name: 'Passed', x: units, y: byUnit('Passed'), marker: { color: C.green } },
     { type: 'bar', name: 'Failed', x: units, y: byUnit('Failed'), marker: { color: C.red } },
     { type: 'bar', name: 'Not Started', x: units, y: byUnit('Not Started'), marker: { color: C.border } },
-  ], { barmode: 'stack', legend: { orientation: 'h', y: 1.05, x: 0 }, margin: { t: 10, b: 40, l: 10, r: 10 } });
+  ], { barmode: 'stack', legend: { orientation: 'h', y: 1.15, yanchor: 'bottom', x: 0 }, margin: { t: 70, b: 40, l: 10, r: 10 } });
 
   // Results by contractor (stacked hbar)
   const cos = uniq(tests.map(t => t.assigned_company)).map(co => {
@@ -646,8 +646,8 @@ function renderTests(tests, issues) {
     { type: 'bar', orientation: 'h', name: 'Passed', y: cos.map(d => d.co), x: cos.map(d => d.passed), marker: { color: C.green } },
     { type: 'bar', orientation: 'h', name: 'Failed', y: cos.map(d => d.co), x: cos.map(d => d.failed), marker: { color: C.red } },
     { type: 'bar', orientation: 'h', name: 'Not Started / In Progress', y: cos.map(d => d.co), x: cos.map(d => d.other), marker: { color: C.border } },
-  ], { barmode: 'stack', legend: { orientation: 'h', y: 1.05, x: 0 },
-    yaxis: { tickfont: { color: C.text, size: 11 } }, margin: { t: 10, b: 20, l: 10, r: 40 },
+  ], { barmode: 'stack', legend: { orientation: 'h', y: 1.15, yanchor: 'bottom', x: 0 },
+    yaxis: { tickfont: { color: C.text, size: 11 } }, margin: { t: 70, b: 20, l: 10, r: 40 },
     height: Math.max(200, cos.length * 60) });
 
   // Attempt-count heatmap: equipment unit (y) × attempt count (x) → # tests

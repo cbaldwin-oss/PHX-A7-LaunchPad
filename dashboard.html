@@ -188,9 +188,7 @@
 //  CriticalArc Dashboard — faithful HTML/Plotly rebuild of the Streamlit app
 // ═══════════════════════════════════════════════════════════════════════
 
-// If deployed with an on-demand endpoint, set this and the Refresh button will
-// POST to it (server does the signed CxAlloy pull, returns fresh JSON).
-const REFRESH_ENDPOINT = null;  // e.g. "/api/refresh"
+const REFRESH_ENDPOINT = null;
 
 const FONT = 'Barlow, sans-serif';
 const COND = 'Barlow Condensed, sans-serif';
@@ -216,15 +214,17 @@ function groupSize(rows, key) {
 function sumBy(rows, key) { let s = 0; for (const r of rows) s += (+r[key] || 0); return s; }
 
 // ── shared Plotly styling ──────────────────────────────────────────────
-// automargin defaults on so long tick labels are never clipped. Axes are
-// deep-merged (Object.assign is shallow) so a chart's own xaxis/yaxis keeps
-// automargin unless it explicitly sets automargin:false.
 const baseLayout = (extra = {}) => {
   const out = Object.assign({
     plot_bgcolor: 'rgba(0,0,0,0)', paper_bgcolor: 'rgba(0,0,0,0)',
-    font: { family: FONT, size: 11, color: C.muted },
+    font: { family: FONT, size: 10, color: C.muted },
     margin: { t: 30, b: 30, l: 10, r: 10 },
-    legend: { bgcolor: 'rgba(0,0,0,0)', font: { color: C.muted } },
+    legend: {
+      bgcolor: 'rgba(0,0,0,0)',
+      font: { color: C.muted, size: 10 },
+      itemwidth: 25,
+      itemgap: 5
+    },
   }, extra);
   out.xaxis = Object.assign({ gridcolor: C.border, tickfont: { color: C.muted }, automargin: true }, extra.xaxis || {});
   out.yaxis = Object.assign({ gridcolor: C.border, tickfont: { color: C.muted }, automargin: true }, extra.yaxis || {});
@@ -249,16 +249,11 @@ function table(cols, rows) {
   return `<div class="table-wrap"><table class="dt"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
-// ── Building Phase resolution ──────────────────────────────────────────
-// Equipment rows carry building_phase directly; issues/checklists/tests are
-// tagged by joining their asset_key to the equipment's building_phase.
 function phaseOf(r) {
   if (r.building_phase) return r.building_phase;
   return (STATE.eqPhase && STATE.eqPhase.get(String(r.asset_key))) || 'Unknown';
 }
 
-// ── filtering (mirrors utils/filters.apply_filters) ────────────────────
-// Each filter is an array of selected values; an empty array means "no filter".
 function applyFilters(rows) {
   const f = STATE.filters;
   return rows.filter(r => {
@@ -280,7 +275,7 @@ function renderIssues(issues) {
   const open = issues.filter(i => i.status !== 'Closed');
   STATE.openIssues = open;
   const dopen = (i) => +i.days_open || 0;
-  const esc90 = open.filter(i => dopen(i) > 90);           // Critical — escalate now
+  const esc90 = open.filter(i => dopen(i) > 90);
   const esc60 = open.filter(i => dopen(i) > 60 && dopen(i) <= 90);
   const esc30 = open.filter(i => dopen(i) > 30 && dopen(i) <= 60);
   const highPri = open.filter(i => (i.priority || '').includes('High'));
@@ -292,11 +287,11 @@ function renderIssues(issues) {
     kpi('Watch · 30–60 Days', esc30.length, 'kpi-blue', 'aging') +
     kpi('High Priority', highPri.length, 'kpi-red', 'open &amp; high') + '</div>';
 
-  html += section('Issue Burn-Down &amp; Projection') + chartBox('iss-burndown', 340) +
+  html += section('Issue Burn-Down &amp; Projection') + chartBox('iss-burndown', 360) +
     '<div class="caption" id="iss-burncap"></div>';
 
   html += section('Issue Breakdown') +
-    `<div class="grid2">${chartBox('iss-priority')}${chartBox('iss-status')}</div>`;
+    `<div class="grid2">${chartBox('iss-priority', 380)}${chartBox('iss-status', 380)}</div>`;
   html += section('Issues by Contractor') + chartBox('iss-contractor', 400);
 
   html += section('Escalation by Contractor') +
@@ -333,7 +328,6 @@ function renderIssues(issues) {
     `</details>`;
   root.innerHTML = html;
 
-  // Burn-down & projection + escalation slider
   renderBurndown(issues);
   renderEscalation();
   const th = document.getElementById('iss-thresh');
@@ -355,9 +349,19 @@ function renderIssues(issues) {
     type: 'pie', hole: 0.65, labels: pri.map(d => d.key), values: pri.map(d => d.count),
     marker: { colors: pri.map((_, i) => priScale[i % priScale.length]), line: { color: C.panel, width: 2 } },
     textinfo: 'none', hovertemplate: '<b>%{label}</b><br>%{value} (%{percent})<extra></extra>',
-  }], baseLayout({ title: { text: 'All Issues by Priority', font: { color: C.muted, family: COND, size: 12 } },
-    showlegend: true, legend: { orientation: 'v', y: -0.2, yanchor: 'top', x: 0.5, xanchor: 'center', font: { color: C.muted } },
-    margin: { t: 40, b: 120, l: 10, r: 10 } }), CFG);
+  }], baseLayout({
+    title: { text: 'All Issues by Priority', font: { color: C.muted, family: COND, size: 12 } },
+    showlegend: true,
+    legend: {
+      orientation: 'h',
+      y: -0.15,
+      yanchor: 'top',
+      x: 0.5,
+      xanchor: 'center',
+      font: { color: C.muted, size: 10 }
+    },
+    margin: { t: 40, b: 80, l: 10, r: 10 }
+  }), CFG);
 
   // Status bar
   const statusColors = { Open:'#E04040','In Progress':'#4A90D9','Pending Review':'#F4B942',
@@ -366,7 +370,7 @@ function renderIssues(issues) {
   plot('iss-status', [{ type: 'bar', x: st.map(d => d.key), y: st.map(d => d.count),
     marker: { color: st.map(d => statusColors[d.key] || C.muted) } }],
     { title: { text: 'All Issues by Status', font: { color: C.muted, family: COND, size: 12 } },
-      margin: { t: 40, b: 30, l: 10, r: 10 } });
+      margin: { t: 40, b: 40, l: 10, r: 10 } });
 
   // Contractor (top 15)
   const con = groupSize(issues, 'assigned_company').sort((a, b) => b.count - a.count).slice(0, 15);
@@ -382,17 +386,14 @@ function fmtAssigned(r) {
 function fmtDate(v) { if (!v) return ''; const d = new Date(v); return isNaN(d) ? '' :
   `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`; }
 
-// Age-threshold slider state (Escalation by Contractor); 30/60/90-day model.
 let ISS_THRESH = 30;
 
-// Monday-anchored ISO week key for weekly bucketing.
 function weekKey(dateStr) {
   const d = new Date(dateStr); if (isNaN(d)) return null;
   const m = new Date(d); m.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   return m.toISOString().slice(0, 10);
 }
 
-// Weekly created-vs-closed burn-down + trailing-3-week projection to clear backlog.
 function renderBurndown(issues) {
   const box = document.getElementById('iss-burndown');
   const cap = document.getElementById('iss-burncap');
@@ -416,10 +417,19 @@ function renderBurndown(issues) {
     { type: 'bar', name: 'Closed', x: weeks, y: weeklyClosed, marker: { color: C.green } },
     { type: 'scatter', mode: 'lines+markers', name: 'Open backlog', x: weeks, y: openY,
       line: { color: C.red, width: 2 }, marker: { size: 5 } },
-  ], baseLayout({ barmode: 'group', legend: { orientation: 'h', y: 1.2, yanchor: 'bottom', x: 0 },
+  ], baseLayout({
+    barmode: 'group',
+    legend: {
+      orientation: 'h',
+      y: 1.18,
+      yanchor: 'bottom',
+      x: 0,
+      font: { size: 10 }
+    },
     xaxis: { gridcolor: C.border, tickfont: { color: C.muted } },
     yaxis: { title: 'Issues', gridcolor: C.border, tickfont: { color: C.muted } },
-    margin: { t: 80, b: 30, l: 40, r: 10 } }), CFG);
+    margin: { t: 60, b: 30, l: 40, r: 10 }
+  }), CFG);
 
   const last3 = weeklyClosed.slice(-3);
   const avg = last3.length ? last3.reduce((a, b) => a + b, 0) / last3.length : 0;
@@ -435,7 +445,6 @@ function renderBurndown(issues) {
   }
 }
 
-// Open issues aging past the slider threshold, grouped by contractor (GC-facing).
 function renderEscalation() {
   const root = document.getElementById('iss-escalation');
   if (!root) return;
@@ -469,9 +478,9 @@ function renderChecklists(cl) {
 
   let html = section('Checklist Status by Level') +
     `<div class="kpi-row" style="grid-template-columns:repeat(${active.length},minmax(0,1fr))">` +
-    active.map((lv, i) => chartBox(`cl-donut-${i}`, 300)).join('') + '</div>';
+    active.map((lv, i) => chartBox(`cl-donut-${i}`, 360)).join('') + '</div>';
   html += section('Completion by Discipline') + chartBox('cl-disc', 300);
-  html += section('Checklists by Level &amp; Discipline') + chartBox('cl-leveldisc', 300);
+  html += section('Checklists by Level &amp; Discipline') + chartBox('cl-leveldisc', 360);
   html += section('Open Checklists by Company &amp; Level') + chartBox('cl-company', 400);
   html += section('Completion by Contractor') + '<div id="cl-contractor-table"></div>';
   html += '<div id="cl-pending"></div>';
@@ -481,24 +490,31 @@ function renderChecklists(cl) {
     'GC to Verify':'#4A90D9','Finished':'#39B54A' };
   const levelColors = { L2:'#7F77DD', L3:'#1D9E75', L4:'#5DCAA5', FAT:'#85B7EB' };
 
-  // Per-level donuts
   active.forEach((lv, i) => {
     const sub = cl.filter(c => c.level === lv);
     const sc = groupSize(sub, 'status');
     Plotly.react(`cl-donut-${i}`, [{
       type: 'pie', hole: 0.65, labels: sc.map(d => d.key), values: sc.map(d => d.count),
       marker: { colors: sc.map(d => dcStatusColors[d.key] || C.border) },
-      textinfo: 'percent', textfont: { size: 11, color: '#23262B', family: FONT },
+      textinfo: 'percent', textfont: { size: 10, color: '#23262B', family: FONT },
       hovertemplate: '%{label}: %{value}<extra></extra>',
     }], baseLayout({
       title: { text: lv, font: { size: 16, color: levelColors[lv] || C.text, family: COND }, x: 0.5, xanchor: 'center' },
       annotations: [{ text: `<b>${sub.length.toLocaleString()}</b>`, x: 0.5, y: 0.5, showarrow: false,
         font: { size: 20, color: C.text, family: COND } }],
-      showlegend: true, legend: { orientation: 'v', y: -0.15, yanchor: 'top', x: 0.5, xanchor: 'center', font: { size: 10, color: C.muted } },
-      margin: { t: 40, b: 120, l: 10, r: 10 } }), CFG);
+      showlegend: true,
+      legend: {
+        orientation: 'h',
+        y: -0.2,
+        yanchor: 'top',
+        x: 0.5,
+        xanchor: 'center',
+        font: { size: 9, color: C.muted }
+      },
+      margin: { t: 30, b: 100, l: 5, r: 5 }
+    }), CFG);
   });
 
-  // Completion by discipline (stacked hbar)
   const discs = uniq(cl.map(c => c.discipline)).filter(d => !isBad(d));
   const dc = discs.map(d => {
     const rows = cl.filter(c => c.discipline === d);
@@ -513,10 +529,9 @@ function renderChecklists(cl) {
     { type: 'bar', orientation: 'h', y: dc.map(d => d.discipline), x: dc.map(d => d.remaining), name: 'Remaining',
       marker: { color: C.border }, text: dc.map(d => String(d.total)), textposition: 'outside',
       textfont: { color: C.muted, family: FONT } },
-  ], { barmode: 'stack', legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.1 },
-    yaxis: { tickfont: { color: C.muted, size: 10 }, automargin: true }, margin: { t: 10, b: 30, l: 10, r: 40 } });
+  ], { barmode: 'stack', legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: -0.15 },
+    yaxis: { tickfont: { color: C.muted, size: 10 }, automargin: true }, margin: { t: 10, b: 40, l: 10, r: 40 } });
 
-  // Checklists by level & discipline (stacked hbar by discipline)
   const discColors = { Mechanical:'#E74C3C', Electrical:'#F5A623',
     'Electrical Power Monitoring System':'#4A90D9', 'Fire Protection':'#39B54A' };
   const discAbbr = { 'Electrical Power Monitoring System':'EPMS' };
@@ -529,10 +544,9 @@ function renderChecklists(cl) {
   });
   plot('cl-leveldisc', ldTraces, { barmode: 'stack',
     yaxis: { categoryorder: 'array', categoryarray: [...active].reverse(), tickfont: { color: C.text, size: 13 }, automargin: true },
-    legend: { orientation: 'h', y: 1.25, yanchor: 'bottom', x: 0, font: { size: 10, color: C.muted } },
-    margin: { t: 80, b: 20, l: 10, r: 20 } });
+    legend: { orientation: 'h', y: 1.3, yanchor: 'bottom', x: 0, font: { size: 9, color: C.muted } },
+    margin: { t: 70, b: 20, l: 10, r: 20 } });
 
-  // Open checklists by company & level (grouped, top 10 companies)
   const openCl = cl.filter(c => !COMPLETE.includes(c.status) && active.includes(c.level));
   const coTotals = groupSize(openCl, 'assigned_company').sort((a, b) => b.count - a.count).slice(0, 10);
   const topCos = coTotals.map(d => d.key);
@@ -544,9 +558,8 @@ function renderChecklists(cl) {
   plot('cl-company', coTraces, { barmode: 'group',
     xaxis: { tickangle: -35, tickfont: { color: C.muted }, automargin: true },
     yaxis: { gridcolor: C.border, tickfont: { color: C.muted }, automargin: true },
-    legend: { orientation: 'h', y: 1.05, x: 0 }, margin: { t: 10, b: 90, l: 10, r: 10 } });
+    legend: { orientation: 'h', y: 1.15, yanchor: 'bottom', x: 0 }, margin: { t: 40, b: 90, l: 10, r: 10 } });
 
-  // Completion by contractor (table) + pending assignment
   const unassigned = ['not assigned yet','not assigned','','nan','none'];
   const classify = (c) => {
     const name = String(c.assigned_company || '').trim().toLowerCase();
@@ -592,10 +605,10 @@ function renderTests(tests, issues) {
     kpi('Total Tests', total, 'kpi-white') + kpi('Passed', passed, 'kpi-green') +
     kpi('Failed', failed, 'kpi-red') + kpi('Not Started', notStarted, 'kpi-white') + '</div>';
   html += `<div class="grid2" style="margin-top:16px">
-    <div>${section('Tests by Status')}${chartBox('ts-status', 300)}</div>
-    <div>${section('Pass Rate')}${chartBox('ts-gauge', 300)}</div></div>`;
-  html += section('Results by Equipment Unit') + chartBox('ts-unit', 350);
-  html += section('Results by Contractor') + chartBox('ts-contractor', 300);
+    <div>${section('Tests by Status')}${chartBox('ts-status', 360)}</div>
+    <div>${section('Pass Rate')}${chartBox('ts-gauge', 360)}</div></div>`;
+  html += section('Results by Equipment Unit') + chartBox('ts-unit', 380);
+  html += section('Results by Contractor') + chartBox('ts-contractor', 360);
   html += section('Test Attempt Concentration') +
     `<div class="caption">More attempts = more re-testing effort (and burn). Darker cells are being run repeatedly.</div>` +
     chartBox('ts-heat', 340);
@@ -613,11 +626,18 @@ function renderTests(tests, issues) {
   const sc = groupSize(tests, 'status');
   Plotly.react('ts-status', [{ type: 'pie', hole: 0.65, labels: sc.map(d => d.key), values: sc.map(d => d.count),
     marker: { colors: sc.map(d => tsColors[d.key] || C.muted) }, textinfo: 'percent',
-    textfont: { size: 12, color: C.text, family: FONT }, hovertemplate: '%{label}: %{value}<extra></extra>' }],
+    textfont: { size: 11, color: C.text, family: FONT }, hovertemplate: '%{label}: %{value}<extra></extra>' }],
     baseLayout({ annotations: [{ text: `<b>${total}</b>`, x: 0.5, y: 0.5, showarrow: false,
       font: { size: 22, color: C.text, family: COND } }], showlegend: true,
-      legend: { orientation: 'v', y: -0.15, yanchor: 'top', x: 0.5, xanchor: 'center', font: { color: C.muted } },
-      margin: { t: 10, b: 120, l: 10, r: 10 } }), CFG);
+      legend: {
+        orientation: 'h',
+        y: -0.15,
+        yanchor: 'top',
+        x: 0.5,
+        xanchor: 'center',
+        font: { color: C.muted, size: 10 }
+      },
+      margin: { t: 10, b: 80, l: 10, r: 10 } }), CFG);
 
   Plotly.react('ts-gauge', [{ type: 'indicator', mode: 'gauge+number', value: +passRate.toFixed(1),
     number: { suffix: '%', font: { size: 36, color: C.text, family: COND } },
@@ -626,7 +646,6 @@ function renderTests(tests, issues) {
       threshold: { line: { color: C.text, width: 2 }, thickness: 0.75, value: passRate } } }],
     baseLayout({ margin: { t: 40, b: 10, l: 30, r: 30 } }), CFG);
 
-  // Results by equipment unit (unit = leading letters+digits of asset_name)
   const unitOf = (a) => { const m = String(a || '').match(/^([A-Za-z]+\d+)/); return m ? m[1] : null; };
   const units = uniq(tests.map(t => unitOf(t.asset_name)).filter(Boolean)).sort();
   const byUnit = (st) => units.map(u => tests.filter(t => unitOf(t.asset_name) === u && t.status === st).length);
@@ -634,9 +653,8 @@ function renderTests(tests, issues) {
     { type: 'bar', name: 'Passed', x: units, y: byUnit('Passed'), marker: { color: C.green } },
     { type: 'bar', name: 'Failed', x: units, y: byUnit('Failed'), marker: { color: C.red } },
     { type: 'bar', name: 'Not Started', x: units, y: byUnit('Not Started'), marker: { color: C.border } },
-  ], { barmode: 'stack', legend: { orientation: 'h', y: 1.15, yanchor: 'bottom', x: 0 }, margin: { t: 70, b: 40, l: 10, r: 10 } });
+  ], { barmode: 'stack', legend: { orientation: 'h', y: 1.2, yanchor: 'bottom', x: 0 }, margin: { t: 60, b: 40, l: 10, r: 10 } });
 
-  // Results by contractor (stacked hbar)
   const cos = uniq(tests.map(t => t.assigned_company)).map(co => {
     const rows = tests.filter(t => t.assigned_company === co);
     const p = rows.filter(t => t.status === 'Passed').length, f = rows.filter(t => t.status === 'Failed').length;
@@ -646,11 +664,10 @@ function renderTests(tests, issues) {
     { type: 'bar', orientation: 'h', name: 'Passed', y: cos.map(d => d.co), x: cos.map(d => d.passed), marker: { color: C.green } },
     { type: 'bar', orientation: 'h', name: 'Failed', y: cos.map(d => d.co), x: cos.map(d => d.failed), marker: { color: C.red } },
     { type: 'bar', orientation: 'h', name: 'Not Started / In Progress', y: cos.map(d => d.co), x: cos.map(d => d.other), marker: { color: C.border } },
-  ], { barmode: 'stack', legend: { orientation: 'h', y: 1.15, yanchor: 'bottom', x: 0 },
-    yaxis: { tickfont: { color: C.text, size: 11 } }, margin: { t: 70, b: 20, l: 10, r: 40 },
-    height: Math.max(200, cos.length * 60) });
+  ], { barmode: 'stack', legend: { orientation: 'h', y: 1.2, yanchor: 'bottom', x: 0 },
+    yaxis: { tickfont: { color: C.text, size: 11 } }, margin: { t: 60, b: 20, l: 10, r: 40 },
+    height: Math.max(240, cos.length * 60) });
 
-  // Attempt-count heatmap: equipment unit (y) × attempt count (x) → # tests
   const atts = uniq(tests.map(t => +t.attempt_count || 0).filter(n => n > 0)).sort((a, b) => a - b);
   const heatUnits = uniq(tests.map(t => unitOf(t.asset_name)).filter(Boolean)).sort();
   if (atts.length && heatUnits.length) {
@@ -665,7 +682,6 @@ function renderTests(tests, issues) {
       margin: { t: 10, b: 30, l: 10, r: 10 } }), CFG);
   } else { document.getElementById('ts-heat').innerHTML = '<div class="empty">No attempt data to chart.</div>'; }
 
-  // Open issues by test attempt count: link issues to tests via asset_key
   const assetAttempt = new Map();
   for (const t of tests) { const k = String(t.asset_key); const a = +t.attempt_count || 0;
     assetAttempt.set(k, Math.max(assetAttempt.get(k) || 0, a)); }
@@ -691,7 +707,6 @@ function renderEquipment(equipment, checklists, tests, issues) {
   const root = document.getElementById('tab-equipment');
   if (!equipment.length) { root.innerHTML = `<div class="empty">No equipment data available.</div>`; return; }
 
-  // Link counts by asset_key -> equipment_id
   const clAgg = new Map(), tsAgg = new Map(), issAgg = new Map();
   for (const c of checklists) { const k = String(c.asset_key);
     const a = clAgg.get(k) || { total: 0, done: 0 }; a.total++;
@@ -766,7 +781,6 @@ function renderEqBody(eq, total) {
     return types.map(t => { const r = rows.filter(e => e.type === t); return agg(t, r); });
   };
 
-  // Equipment by type (count)
   let tsum = byType(f, (t, r) => ({ type: t, count: r.length })).sort((a, b) => a.count - b.count);
   plot('eq-type', [{ type: 'bar', orientation: 'h', y: tsum.map(d => d.type), x: tsum.map(d => d.count),
     marker: { color: C.blue }, text: tsum.map(d => d.count), textposition: 'outside',
@@ -774,7 +788,6 @@ function renderEqBody(eq, total) {
     { yaxis: { tickfont: { color: C.text, size: 11 } }, margin: { t: 10, b: 20, l: 10, r: 40 },
       height: Math.max(300, tsum.length * 26) });
 
-  // Searchable, incomplete-focused checklist completion table (per equipment unit)
   renderEqTable(f);
   const sInput = document.getElementById('eqSearch'), sChk = document.getElementById('eqIncomplete');
   if (sInput) sInput.addEventListener('input', () => { EQ_SEARCH.q = sInput.value; renderEqTable(f); });
@@ -785,7 +798,7 @@ let EQ_SEARCH = { q: '', incompleteOnly: true };
 function renderEqTable(eqRows) {
   const cont = document.getElementById('eq-cl-table');
   if (!cont) return;
-  let r = eqRows.filter(e => e.cl_total > 0);           // only units that carry checklists
+  let r = eqRows.filter(e => e.cl_total > 0);
   if (EQ_SEARCH.incompleteOnly) r = r.filter(e => e.cl_done < e.cl_total);
   const q = EQ_SEARCH.q.trim().toLowerCase();
   if (q) r = r.filter(e => String(e.name || '').toLowerCase().includes(q) ||
@@ -808,13 +821,11 @@ function renderEqTable(eqRows) {
 // ═══════════════════════════════════════════════════════════════════════
 const STATUS_OPTIONS = ['Open','In Progress','Pending Review','Closed'];
 
-// Render a multi-select checkbox group into a container.
 function buildCheckGroup(id, values) {
   const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
   document.getElementById(id).innerHTML = values.map(v =>
     `<label><input type="checkbox" value="${esc(v)}" /><span title="${esc(v)}">${esc(v)}</span></label>`).join('');
 }
-// Read the checked values from a checkbox group.
 function readCheckGroup(id) {
   return [...document.querySelectorAll(`#${id} input[type="checkbox"]:checked`)].map(i => i.value);
 }
@@ -842,9 +853,6 @@ function renderAll() {
   renderTests(tests, issues);
   renderEquipment(equipment, checklists, tests, issues);
   document.getElementById('pageTitle').textContent = d.project_name || 'Project Dashboard';
-  // Prefer the actual CxAlloy sync time (data_synced_at, UTC ISO8601) so the stamp
-  // reflects when the DATA was refreshed, not when this page happened to load.
-  // Older JSON without the field falls back to page-load time.
   const synced = d.data_synced_at ? new Date(d.data_synced_at) : null;
   const isData = !!(synced && !isNaN(synced));
   const stamp = isData ? synced : new Date();
@@ -863,22 +871,20 @@ async function loadProject(pid) {
   STATE.eqPhase = new Map(STATE.data.equipment.map(e => [String(e.equipment_id), e.building_phase]));
   STATE.filters = { discipline: [], contractor: [], status: [], phase: [] };
   EQ_FILTER = { bldg: 'All', floor: 'All' };
-  rebuildFilterOptions();  // fresh, all-unchecked checkbox groups
+  rebuildFilterOptions();
   renderAll();
   document.getElementById('loading').style.display = 'none';
   document.getElementById('dash').style.display = 'block';
 }
 
 async function init() {
-  // Tab switching
   document.querySelectorAll('.tab').forEach(btn => btn.onclick = () => {
     document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tabpage').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-    window.dispatchEvent(new Event('resize'));  // make Plotly size correctly on reveal
+    window.dispatchEvent(new Event('resize'));
   });
-  // Filters — each group is a multi-select; change on any checkbox recomputes all tabs.
   ['fDiscipline','fContractor','fStatus','fPhase'].forEach(id => {
     document.getElementById(id).addEventListener('change', () => {
       STATE.filters = {
@@ -890,7 +896,6 @@ async function init() {
       renderAll();
     });
   });
-  // Refresh button
   document.getElementById('refreshBtn').onclick = async () => {
     const btn = document.getElementById('refreshBtn');
     btn.disabled = true; btn.textContent = '⏳ Refreshing…';
@@ -900,7 +905,6 @@ async function init() {
     } finally { btn.disabled = false; btn.textContent = '🔄 Refresh Data'; }
   };
 
-  // Project list
   const projects = await (await fetch('shared-dashboard/html-dashboard/data/projects.json')).json();
   const sel = document.getElementById('projectSelect');
   sel.innerHTML = projects.map(p => `<option value="${p.project_id}">${p.name}</option>`).join('');

@@ -1499,11 +1499,25 @@ body.dark-mode .phase-row {
     </div>
 </div>
 <div id="dashboard-view" style="display: none; height: 100%; width: 100%;">
-    <iframe 
-        src="dashboard.html"
-        style="width: 100%; height: 100%; border: none; margin: 0; padding: 0; display: block;"
-        title="Dashboard View">
-    </iframe>
+    <!-- Inside your LaunchPad Application HTML -->
+
+<!-- 1. The container where the dashboard will render -->
+<div id="launchpad-dashboard-container"></div>
+
+<!-- 2. Import Plotly natively so the script can access it -->
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+
+<!-- 3. Mount the Module -->
+<script type="module">
+  // Import the class we just created
+  import { CriticalArcDashboard } from './js/dashboard.js'; 
+  
+  // Initialize and mount it to the div above
+  document.addEventListener('DOMContentLoaded', () => {
+    const dashboard = new CriticalArcDashboard('launchpad-dashboard-container');
+    dashboard.mount().catch(err => console.error("Failed to load dashboard:", err));
+  });
+</script>
 </div>
 <div id="equipment-tracker-view" style="display: none; height: 100%; width: 100%;">
     <iframe 

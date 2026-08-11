@@ -384,7 +384,7 @@ input,select,textarea{font-family:inherit;}
     <!-- filter chips injected by JS: Type, Zone, Asset Type, Activities, Area -->
     <button class="filter-clear-all" id="clearAllFiltersBtn" onclick="clearAllFilters()">Clear filters</button>
     <div class="toolbar-spacer"></div>
-    <input type="text" class="search-box" id="globalSearch" placeholder="Search asset, activity, contractor..." oninput="renderGantt()">
+    <input type="text" class="search-box" id="globalSearch" placeholder="Search asset, activity, contractor..." oninput="debouncedRenderGantt()">
     <select class="tool-btn small" id="groupBySelect" onchange="renderGantt()" style="font-weight:600;">
         <option value="overall" selected>Group: Overall</option>
         <option value="zone">Group by Zone</option>
@@ -1724,6 +1724,16 @@ function buildRowHtml(gname, laidOut, totalWidth, groupBy, opts) {
     </div>`;
 }
 
+// PERF FIX: debounce the search-driven re-render — renderGantt() rebuilds the
+// header, every group's rows, and re-attaches drag/resize/link handlers, so
+// running it on every keystroke while typing a search term is expensive.
+// Waiting 220ms after typing pauses collapses that into a single render.
+let __ganttSearchDebounceTimer = null;
+function debouncedRenderGantt() {
+    clearTimeout(__ganttSearchDebounceTimer);
+    __ganttSearchDebounceTimer = setTimeout(() => renderGantt(), 220);
+}
+
 function renderGantt() {
     document.documentElement.style.setProperty('--daywidth', DAY_WIDTH + 'px');
     const groupBy = document.getElementById('groupBySelect').value;
@@ -2048,15 +2058,30 @@ function pickTrunkX(startX, topY, succLeftX, succMidY, obstacles) {
    not just direct neighbors. Used to grey out everything else when an
    item is focused and "Show all connections" is off. */
 function getConnectedComponent(itemId) {
+    // PERF FIX: build lookup maps once (O(n)) up front instead of doing a
+    // DATA.items.find()/filter() full-array scan for every node visited in
+    // the BFS below — that pattern made this function O(n^2) on large
+    // schedules, and it re-runs on every render while a connection focus
+    // is active (including every keystroke if the user is also searching).
+    const byId = new Map();
+    const successorsOf = new Map();
+    DATA.items.forEach(i => {
+        byId.set(i.id, i);
+        successorsOf.set(i.id, []);
+    });
+    DATA.items.forEach(i => {
+        (i.predecessor_ids || []).forEach(pid => {
+            if (successorsOf.has(pid)) successorsOf.get(pid).push(i.id);
+        });
+    });
+
     const visited = new Set([itemId]);
     const queue = [itemId];
     while (queue.length) {
         const id = queue.shift();
-        const item = DATA.items.find(i => i.id === id);
+        const item = byId.get(id);
         (item?.predecessor_ids || []).forEach(pid => { if (!visited.has(pid)) { visited.add(pid); queue.push(pid); } });
-        DATA.items.filter(x => (x.predecessor_ids || []).includes(id)).forEach(x => {
-            if (!visited.has(x.id)) { visited.add(x.id); queue.push(x.id); }
-        });
+        (successorsOf.get(id) || []).forEach(sid => { if (!visited.has(sid)) { visited.add(sid); queue.push(sid); } });
     }
     return visited;
 }

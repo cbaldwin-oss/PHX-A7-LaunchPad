@@ -543,7 +543,7 @@ body.dark-mode .frozen-group-bar .frozen-combined {
             <div style="font-weight: bold; color: #555; white-space: nowrap;"><span id="zone-title-display">Site</span> • Equipment Status Tracker</div>
             <div class="global-search-wrapper">
                 <span style="padding-left: 8px; color: #999;">🔍</span>
-                <input type="text" id="global-search-input" placeholder="Find instance..." oninput="performGlobalSearch()">
+                <input type="text" id="global-search-input" placeholder="Find instance..." oninput="debouncedGlobalSearch()">
                 <div id="search-counter">0/0</div>
                 <button class="search-nav-btn" onclick="navigateSearch(-1)">▲</button>
                 <button class="search-nav-btn" onclick="navigateSearch(1)">▼</button>
@@ -833,6 +833,15 @@ body.dark-mode .frozen-group-bar .frozen-combined {
     let searchMatches = [];
     let currentSearchIndex = -1;
 
+    // PERF FIX: debounce the search box — without this, every single keystroke
+    // re-scans every row/cell in the grid. Waiting 220ms after the user pauses
+    // typing means one scan for a typed word instead of one per character.
+    let __searchDebounceTimer = null;
+    window.debouncedGlobalSearch = function() {
+        clearTimeout(__searchDebounceTimer);
+        __searchDebounceTimer = setTimeout(() => performGlobalSearch(), 220);
+    };
+
     window.performGlobalSearch = function() {
         const query = document.getElementById('global-search-input').value.toLowerCase().trim();
         const counter = document.getElementById('search-counter');
@@ -854,7 +863,7 @@ body.dark-mode .frozen-group-bar .frozen-combined {
         container.style.display = 'none'; // DETACH FOR INSTANT REFLOW
 
         window.rowNodes.forEach(row => {
-            if (window.getComputedStyle(row).display !== 'none') {
+            if (row.style.display !== 'none') {
                 let matchFound = false;
                 let matchedCells = [];
                 
@@ -1307,6 +1316,21 @@ async function fetchTrackerData(isSilent = false) {
 
             const rows = payload.data || [];
             if (payload.config) globalConfig = { ...globalConfig, ...payload.config };
+
+            // --- PERF FIX: skip the (expensive) full grid rebuild if nothing has
+            // actually changed since the last successful fetch. This matters most
+            // for the silent 60s background poll, which would otherwise tear down
+            // and rebuild every row's DOM every single minute even when the
+            // underlying data is identical — resetting scroll position and any
+            // open dropdown along the way.
+            const fingerprint = JSON.stringify({ rows, config: payload.config || null });
+            if (isSilent && window.__lastTrackerFingerprint === fingerprint) {
+                if (document.getElementById('global-search-input').value.trim() === '') {
+                    document.getElementById('sync-status').innerText = 'Live Sync Active 🟢';
+                }
+                return;
+            }
+            window.__lastTrackerFingerprint = fingerprint;
             
             if (globalConfig.customHeaders) {
                 document.getElementById('zone-title-display').innerText = globalConfig.customHeaders.zoneTitle || 'Zone 1';
@@ -1505,10 +1529,18 @@ window.onload = function() {
         fetchTrackerData(false); 
         
         // 2. NEW: Silently pull the latest equipment data every 60 seconds!
+        // PERF FIX: skip the tick entirely while the tab is hidden/backgrounded
+        // (Page Visibility API) — no point polling and re-rendering a view
+        // nobody's looking at. Catch up with one fresh pull as soon as the
+        // tab becomes visible again so data isn't stale.
         setInterval(() => {
+            if (document.hidden) return;
             console.log("♻️ Background Poll: Fetching latest equipment matrix...");
             fetchTrackerData(true);
         }, 60000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) fetchTrackerData(true);
+        });
         
         // 3. Ask the parent window for admin status using a secure message
         if (window.parent) {

@@ -1870,10 +1870,18 @@ if (isIPad()) {
     document.body.classList.add('ipad-mode');
 }
 
+// PERF FIX: skip this tick while the tab is hidden/backgrounded (Page
+// Visibility API) — triggerFullStatusRefresh() walks occupied rows and fires
+// a paced series of network lookups; no reason to do that for a tab nobody's
+// looking at. Catch up with one pass as soon as the tab becomes visible again.
 setInterval(() => {
+        if (document.hidden) return;
         triggerFullStatusRefresh(); // Silent background sync
          // Periodic Google Sheets refresh
 }, 60000);
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) triggerFullStatusRefresh();
+});
 
 let searchState = {
     results: [],
@@ -3754,13 +3762,15 @@ async function triggerFullStatusRefresh() {
     const occupiedRows = document.querySelectorAll('.cell-row[data-occupied="true"]');
     let refreshCount = 0;
 
+    // Gather everything eligible for refresh first...
+    const eligible = [];
     for (const row of occupiedRows) {
         const rowDate = row.getAttribute('data-date');
 
         // 2. Filter: Only proceed if the row falls within the targeted 7-day window
         if (rowDate >= todayStr && rowDate <= endStr) {
             const rowNum = parseInt(row.id.replace('row-wrapper-', ''));
-            
+
             // Search for the specific columns using the data-col-index attribute
             const col3 = row.querySelector('[data-col-index="3"]');
             const col4 = row.querySelector('[data-col-index="4"]');
@@ -3772,19 +3782,30 @@ async function triggerFullStatusRefresh() {
 
                 // Only redo lookup if both Place and Activity fields are populated
                 if (val3 !== "" && val4 !== "") {
-                    refreshCount++;
-
-                    // THE REMOVED FLICKER FIX:
-                    // We no longer set col5.innerText = "Refreshing..." or clear Supabase beforehand.
-                    // This allows lookupColumn5Value to check the status seamlessly behind the scenes.
-                    
-                    // Trigger the background VLOOKUP check silently (isBackground = true)
-                    lookupColumn5Value(rowNum, rowDate, true);
-
-                    // Small delay to pace requests out cleanly and prevent hitting rate limits
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    eligible.push({ rowNum, rowDate });
                 }
             }
+        }
+    }
+
+    // ...then run the lookups in small concurrent batches instead of fully
+    // serialized one-at-a-time with a fixed 100ms gap between every single
+    // row. A busy 7-day window could otherwise take many seconds to fully
+    // refresh, end-to-end. Batches of 4 cut that time substantially while
+    // still pacing requests out (Google Apps Script has its own concurrency
+    // limits, so we don't want to fire everything at once).
+    const BATCH_SIZE = 4;
+    for (let i = 0; i < eligible.length; i += BATCH_SIZE) {
+        const batch = eligible.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(({ rowNum, rowDate }) =>
+            // THE REMOVED FLICKER FIX: we no longer set col5.innerText = "Refreshing..."
+            // or clear Supabase beforehand — this lets lookupColumn5Value check the
+            // status seamlessly behind the scenes.
+            lookupColumn5Value(rowNum, rowDate, true)
+        ));
+        refreshCount += batch.length;
+        if (i + BATCH_SIZE < eligible.length) {
+            await new Promise(resolve => setTimeout(resolve, 150));
         }
     }
 }

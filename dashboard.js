@@ -798,7 +798,12 @@ export class CriticalArcDashboard {
 
     this.renderEqTable(f);
     const sInput = this.q('ca-eqSearch'), sChk = this.q('ca-eqIncomplete');
-    if (sInput) sInput.addEventListener('input', () => { this.EQ_SEARCH.q = sInput.value; this.renderEqTable(f); });
+    if (sInput) sInput.addEventListener('input', () => {
+      this.EQ_SEARCH.q = sInput.value;
+      // PERF FIX: debounce — without this every keystroke re-renders the table.
+      clearTimeout(this._eqSearchDebounceTimer);
+      this._eqSearchDebounceTimer = setTimeout(() => this.renderEqTable(f), 220);
+    });
     if (sChk) sChk.addEventListener('change', () => { this.EQ_SEARCH.incompleteOnly = sChk.checked; this.renderEqTable(f); });
   }
 

@@ -35,7 +35,7 @@
 }
 
         .header {
-            height: 80px; background-color: #ffffff; border-bottom: 1px solid #dcdcdc;
+            height: 48px; background-color: #ffffff; border-bottom: 1px solid #dcdcdc;
             display: flex; align-items: center; padding: 0 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);
         }
         .header-center { flex: 1; text-align: center; }
@@ -254,14 +254,18 @@
     padding: 10px 20px; 
 }
 
-/* Stack the filter groups vertically on the right side */
+/* The two filter groups (Locations, Statuses) now fill the header
+   horizontally instead of stacking on the right — there's no logo/title
+   competing for space anymore, so the header can be much shorter. */
 .header-right {
     display: flex;
-    flex-direction: column; /* Stacks the two filter groups */
-    gap: 8px;               /* Space between the two rows */
-    align-items: flex-end;  /* Aligns both rows to the right edge */
-    justify-content: center;
-    height: 100%;           /* Ensures it uses the header's height for centering */
+    flex-direction: row;
+    flex-wrap: wrap;        /* wrap onto a second line on narrow screens instead of overflowing */
+    gap: 24px;               /* breathing room between the Locations and Statuses groups */
+    align-items: center;
+    justify-content: flex-start;
+    height: 100%;
+    width: 100%;             /* fill the header's full width now that the logo/title are gone */
 }
 
 .filter-group {
@@ -278,7 +282,7 @@
     letter-spacing: 0.5px;
 }
 
-/* Optional: Shrink buttons slightly so two rows fit comfortably in the 80px header */
+/* Compact pill buttons — sized to sit comfortably in the shorter, single-row header */
 .filter-btn {
     padding: 3px 10px;
     font-size: 11px;
@@ -543,10 +547,6 @@ input:not([type="checkbox"]), textarea, select {
 <datalist id="location-list"></datalist>
 
 <div class="header">
-    <div class="header-left">
-        <img src="https://lh3.googleusercontent.com/u/0/d/1uVtWyL2Zx9zQE6oDCQ_AC3CbJk7n-R-6" alt="Company Logo" class="header-logo">
-        <div class="seal-log-header">Tamper Seal Log</div>
-    </div>
     <div class="header-right" id="filter-container"></div>
 </div>
 

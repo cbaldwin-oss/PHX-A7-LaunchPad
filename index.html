@@ -1137,7 +1137,12 @@ html, body {
     }
     
     .cell-row {
-        display: flex !important;
+        /* 🟢 FILTER FIX: this was "display: flex !important;" which unconditionally
+           overrode every JS-driven row.style.display = 'none' (filters, autoCleanUI,
+           row limits, deletes) — rows were being hidden correctly in the DOM but this
+           rule forced them to stay visually flex regardless. Not !important anymore;
+           JS still reliably shows rows as flex when needed (see autoCleanUI/addRowsToContainer). */
+        display: flex;
         align-items: stretch !important;
         padding: 6px 0 !important;
         border-bottom: 2px solid #b0bec5 !important;
@@ -1584,7 +1589,7 @@ body.dark-mode .phase-row {
                 <span id="saveIndicator">Saved</span>
                 
                 <!-- NEW: Refresh Button -->
-                <button class="tool-btn" onclick="window.location.reload()" style="background: #e8f5e9; color: #2e7d32; border-color: #2e7d32; margin-left: 5px; font-weight: bold;" title="Reload Window">🔄 Refresh</button>
+                <button class="tool-btn" onclick="refreshScheduleData(this)" style="background: #e8f5e9; color: #2e7d32; border-color: #2e7d32; margin-left: 5px; font-weight: bold;" title="Sync Data">🔄 Refresh</button>
                 
                 <button class="tool-btn" onclick="exportToPDF()" style="background: #ffffff; color: #d6281c; border-color: #d6281c; margin-left: 5px; font-weight: bold;">PDF</button>
             </div>
@@ -1974,6 +1979,42 @@ function setReadyFilter(type, btnElement) {
 }
 
 /**
+ * Refreshes only the schedule data and dropdowns without a full page reload.
+ */
+async function refreshScheduleData(btn) {
+    const originalText = btn.innerHTML;
+    
+    // UI Feedback: Show loading state
+    btn.innerHTML = "⏳ Syncing...";
+    btn.disabled = true;
+    document.getElementById('saveIndicator').innerText = "Syncing with cloud...";
+    document.getElementById('saveIndicator').style.display = 'inline-block';
+    
+    try {
+        // 1. Fetch latest dropdown options (in case someone added a new asset/activity)
+        await fetchPHXA7dropdownoptions();
+        refreshDropdowns();
+        
+        // 2. Fetch the latest schedule line items
+        await loadData();
+        
+        // UI Feedback: Success
+        btn.innerHTML = "✅ Synced";
+        document.getElementById('saveIndicator').innerText = `Synced at: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } catch (error) {
+        console.error("Refresh Error:", error);
+        btn.innerHTML = "❌ Error";
+        document.getElementById('saveIndicator').innerText = "Sync failed";
+    }
+    
+    // Reset button after 2 seconds
+    setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }, 2000);
+}
+
+/**
  * Draws the list with Checkboxes
  */
 function renderReadyList() {
@@ -2061,16 +2102,16 @@ async function addSelectedReadyItems() {
         // Grab the ID of this specific row to trigger the lookup
         const rowNum = parseInt(emptyRow.id.replace('row-wrapper-', ''));
         
-        const col3 = emptyRow.querySelector(`[data-col-index="3"]`); // Activity
+        const col2 = emptyRow.querySelector(`[data-col-index="2"]`); // Activity
         const col4 = emptyRow.querySelector(`[data-col-index="4"]`); // Asset
         
         // Add Activity
-        if (col3) {
-            const exists = Array.from(col3.options || []).some(opt => opt.value === item.activity);
-            if (!exists && col3.tagName === 'SELECT') col3.add(new Option(item.activity, item.activity));
-            col3.value = item.activity;
-            applyCellColor(col3, item.activity);
-            saveCell(col3, item.activity, 3, true); // Save to Supabase
+        if (col2) {
+            const exists = Array.from(col2.options || []).some(opt => opt.value === item.activity);
+            if (!exists && col2.tagName === 'SELECT') col2.add(new Option(item.activity, item.activity));
+            col2.value = item.activity;
+            applyCellColor(col2, item.activity);
+            saveCell(col2, item.activity, 2, true); // Save to Supabase
         }
         
         // Add Asset
@@ -3375,9 +3416,12 @@ let selectedResults = [];
  * Main function to build all sections in the Filter Sidebar
  */
 function renderSidebarFilters() {
-    renderFilterSection('vertical-places-filter-container', 'Places', window.dropdownData?.col2 || [], selectedPlaces, 'togglePlaceFilter');
-    renderFilterSection('vertical-activities-filter-container', 'Activities', window.dropdownData?.col3 || [], selectedActivities, 'toggleActivityFilter');
-    renderFilterSection('vertical-results-filter-container', 'Results', window.dropdownData?.col7 || [], selectedResults, 'toggleResultFilter');
+    // 🟢 FILTER FIX: pull option lists from the live schedule data (PHXA7BackEndData)
+    // instead of the separate PHXA7dropdownoptions table, so filter buttons always
+    // match values that actually exist in the rows being filtered.
+    renderFilterSection('vertical-places-filter-container', 'Places', window.filterOptionsData?.places || [], selectedPlaces, 'togglePlaceFilter');
+    renderFilterSection('vertical-activities-filter-container', 'Activities', window.filterOptionsData?.activities || [], selectedActivities, 'toggleActivityFilter');
+    renderFilterSection('vertical-results-filter-container', 'Results', window.filterOptionsData?.results || [], selectedResults, 'toggleResultFilter');
 }
 
 
@@ -3530,59 +3574,6 @@ async function savePhaseRules() {
     }
 }
 
-function renderPlacesFilterButtons() {
-    // Target the new container in the right sidebar
-    const container = document.getElementById('vertical-places-filter-container');
-    if (!container) return;
-
-    // Col2 corresponds to 'Places'
-    const places = window.dropdownData?.col2 || [];
-    
-    const isAllActive = selectedPlaces.length === 0;
-    
-    // Header label and "All" default button
-    container.innerHTML = `
-        <div style="font-weight: bold; color: #333; font-size: 14px; margin-bottom: 5px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">Places:</div>
-        <button class="place-filter-btn-vertical ${isAllActive ? 'active' : ''}" onclick="togglePlaceFilter('All')">All</button>
-    `;
-
-    // Create a button for each non-empty place
-    places.forEach(place => {
-        if (place.trim() !== "") {
-            const btn = document.createElement('button');
-            const isActive = selectedPlaces.includes(place);
-            // Use the new vertical button class
-            btn.className = `place-filter-btn-vertical ${isActive ? 'active' : ''}`;
-            btn.innerText = place;
-            btn.onclick = () => togglePlaceFilter(place);
-            container.appendChild(btn);
-        }
-    });
-}
-
-/**
- * Handles toggling multiple Place filters
- */
-function togglePlaceFilter(place) {
-    if (place === 'All') {
-        // Reset to show everything
-        selectedPlaces = [];
-    } else {
-        // Toggle the selected place in the array
-        const index = selectedPlaces.indexOf(place);
-        if (index > -1) {
-            selectedPlaces.splice(index, 1); // Remove if already selected
-        } else {
-            selectedPlaces.push(place); // Add if not selected
-        }
-    }
-    
-    // Re-render the buttons to update their colors
-    renderPlacesFilterButtons();
-
-    // Trigger the master visibility function to hide/show rows
-    autoCleanUI();
-}
 
 /**
  * Handles the selection of a Place filter
@@ -3967,12 +3958,21 @@ function initRealtimeSync() {
                 const rowEl = document.getElementById(`row-wrapper-${rowId}`);
                 if (rowEl) {
                     rowEl.removeAttribute('data-occupied');
-                    rowEl.querySelectorAll('input, select, textarea').forEach(el => {
-                        el.value = "";
+                    rowEl.querySelectorAll('input, select, textarea, .status-cell').forEach(el => {
+                        if (el.classList.contains('status-cell')) {
+                            el.innerText = "...";
+                        } else {
+                            el.value = "";
+                            // NEW: Clear the multi-select attributes here too
+                            if (el.hasAttribute('data-selected')) {
+                                el.setAttribute('data-selected', '');
+                                if (el.options && el.options[0]) {
+                                    el.options[0].text = "+ Add Multi";
+                                }
+                            }
+                        }
                         applyCellColor(el, "");
                     });
-                    const statusCell = rowEl.querySelector('.status-cell');
-                    if (statusCell) statusCell.innerText = "...";
                 }
             }
         })
@@ -4030,7 +4030,6 @@ function updateRowInUI(row) {
     if (!rowEl) return;
 
     rowEl.setAttribute('data-occupied', 'true');
-
     // Column Name Mapping
     const dbCols = { 1: 'time', 2: 'place', 3: 'activity', 4: 'asset', 5: 'status', 6: 'trade_partners', 7: 'result', 8: 'notes', 9: 'duration' };
 
@@ -4200,19 +4199,25 @@ async function completeAppLaunch() {
     const loader = document.getElementById('loading-overlay');
     
     try {
-        // Load the actual schedule data
-        await fetchPHXA7dropdownoptions();
-        await loadEquivalentActivities();
-        await loadScheduleConfig();
-        await loadAppConfig();
+        // Kick off the heavy schedule data fetch IMMEDIATELY in the background
+        const scheduleDataPromise = _supabase.from('PHXA7BackEndData').select('*');
+
+        // Execute all heavy network config requests simultaneously
+        await Promise.all([
+            fetchPHXA7dropdownoptions(),
+            loadEquivalentActivities(),
+            loadScheduleConfig(),
+            loadAppConfig()
+        ]);
+        
         refreshDropdowns();
-        await loadData();
+        // Pass the pre-fetched promise directly to loadData
+        await loadData(false, scheduleDataPromise);
         initRealtimeSync();
 
         applyViewFilter('view2');
         collapseEverything();
 
-        // Hide the loading screen
         loader.classList.add('hidden');
         setTimeout(() => { 
             loader.style.display = 'none'; 
@@ -4278,41 +4283,35 @@ const permissions = await verifyPermission(user.email);
 if (permissions.isAuthorized) { 
     window.isAuthorized = true;
     window.isAdmin = permissions.isAdmin; 
-
+    
     if (window.isAdmin) {
         console.log("🧹 Admin detected: Cleaning up old history records...");
         const { error } = await _supabase.rpc('delete_old_PHXA7edit_history');
         if (error) console.error("Cleanup Error:", error);
     }
-    
+
     if (window.isAdmin) {
-         // Show the floating blue "Manage Access" button
          document.getElementById('admin-share-btn').style.display = 'inline-block';
-         
-         // Show the Schedule Setup Config button
          const scheduleSetupBtn = document.getElementById('schedule-setup-btn');
-         if (scheduleSetupBtn) {
-             scheduleSetupBtn.style.display = 'inline-block';
-         }
-         
-         // --- THE FIX: Actually show the sidebar icon ---
+         if (scheduleSetupBtn) scheduleSetupBtn.style.display = 'inline-block';
          const navSettings = document.getElementById('nav-settings');
-         if (navSettings) {
-             navSettings.style.display = 'flex'; // This reveals the gear icon
-         }
+         if (navSettings) navSettings.style.display = 'flex'; 
      }
     
-   // Continue with the rest of the launch sequence
-    await fetchPHXA7dropdownoptions();
-    await loadEquivalentActivities();
-    await loadScheduleConfig();
-    
-    // --- THE FIX: Tell the app to download the sidebar config on auto-reload ---
-    await loadAppConfig(); 
+    // Kick off the heavy schedule data fetch IMMEDIATELY in the background
+    const scheduleDataPromise = _supabase.from('PHXA7BackEndData').select('*');
+
+    // Continue with the rest of the launch sequence concurrently
+    await Promise.all([
+        fetchPHXA7dropdownoptions(),
+        loadEquivalentActivities(),
+        loadScheduleConfig(),
+        loadAppConfig()
+    ]);
     
     initPresence(user.email); 
     refreshDropdowns();
-    await loadData();
+    await loadData(false, scheduleDataPromise);
     initRealtimeSync();
     applyViewFilter('view2');
     collapseEverything();
@@ -4674,17 +4673,55 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxAGGzz8TSK29
 
 let dropdownData = { col1: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
 
+// 🟢 FILTER FIX: The sidebar Place/Activity/Result filter buttons must be built
+// from the SAME table the schedule rows come from (PHXA7BackEndData), not the
+// separate PHXA7dropdownoptions table. Those two can drift out of sync, which
+// silently breaks the exact-match filter comparisons in autoCleanUI().
+window.filterOptionsData = { places: [], activities: [], results: [] };
+
+function rebuildFilterOptionsFromBackendData(rows) {
+    const places = new Set();
+    const activities = new Set();
+    const results = new Set();
+
+    (rows || []).forEach(row => {
+        const place = (row.place || "").toString().trim();
+        const activity = (row.activity || "").toString().trim();
+        const result = (row.result || "").toString().trim();
+        if (place) places.add(place);
+        if (activity) activities.add(activity);
+        if (result) results.add(result);
+    });
+
+    window.filterOptionsData = {
+        places: Array.from(places).sort(),
+        activities: Array.from(activities).sort(),
+        results: Array.from(results).sort()
+    };
+
+    renderSidebarFilters();
+}
+
 async function fetchPHXA7dropdownoptions() {
-    // 1. Fetch ALL columns at once so we can see which Assets map to which Places on the same row
-    const { data, error } = await _supabase
-        .from('PHXA7dropdownoptions')
-        .select('Times, Places, Activities, Assets, Trade_Partners, Results')
-        .range(0, 1000); 
-
     const newData = { col1: [], col2: [], col3: [], col4: [], col6: [], col7: [] };
-    const assetToPlaceMap = {}; // NEW: Dictionary to link Assets to Places
+    const assetToPlaceMap = {}; // Dictionary to link Assets to Places
 
-    if (!error && data) {
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+
+    // Loop through Supabase pages until all rows are loaded
+    while (hasMore) {
+        const { data, error } = await _supabase
+            .from('PHXA7dropdownoptions')
+            .select('Times, Places, Activities, Assets, Trade_Partners, Results')
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error || !data || data.length === 0) {
+            hasMore = false;
+            break;
+        }
+
         data.forEach(row => {
             const time = row.Times?.toString().trim();
             const place = row.Places?.toString().trim();
@@ -4694,31 +4731,37 @@ async function fetchPHXA7dropdownoptions() {
             const result = row.Results?.toString().trim();
 
             if (time && !newData.col1.includes(time)) newData.col1.push(time);
-            if (place && !newData.col2.includes(place)) newData.col2.push(place);
-            if (activity && !newData.col3.includes(activity)) newData.col3.push(activity);
+            if (place && !newData.col2.includes(place)) newData.col2.push(place);          // Place is Col 2
+            if (activity && !newData.col3.includes(activity)) newData.col3.push(activity); // Activity is Col 3
             if (asset && !newData.col4.includes(asset)) newData.col4.push(asset);
             if (trade && !newData.col6.includes(trade)) newData.col6.push(trade);
             if (result && !newData.col7.includes(result)) newData.col7.push(result);
-            
-            // NEW: If both an Asset and Place exist on this row, link them together!
+
             if (asset && place) {
                 assetToPlaceMap[asset] = place;
             }
         });
-        
-        newData.col1.sort();
-        newData.col2.sort();
-        newData.col3.sort();
-        newData.col4.sort();
-        newData.col6.sort();
-        newData.col7.sort();
+
+        // If less than 1,000 rows were returned, we have reached the end
+        if (data.length < pageSize) {
+            hasMore = false;
+        } else {
+            page++;
+        }
     }
+
+    newData.col1.sort();
+    newData.col2.sort();
+    newData.col3.sort();
+    newData.col4.sort();
+    newData.col6.sort();
+    newData.col7.sort();
 
     // SWAP the data globally
     window.dropdownData = newData;
-    window.assetToPlaceMap = assetToPlaceMap; // Save the map for the UI grid to use
-    
-    console.log("✅ Dropdown data synced.");
+    window.assetToPlaceMap = assetToPlaceMap;
+
+    console.log(`✅ Dropdown data synced (${newData.col4.length} assets loaded).`);
 
     renderSidebarFilters();
 }
@@ -5259,10 +5302,16 @@ function saveCell(cell, value, colIndex, isImmediate = false) {
     const dateId = row.getAttribute('data-date');
     const rowNum = row.id.replace('row-wrapper-', '');
     
+    // NEW FIX: Do not attempt to save any data if this row is being deleted
+    if (deletingRows.has(parseInt(rowNum))) return;
+
     const timeoutKey = `timeout-${rowNum}-${colIndex}`;
     const failsafeKey = `failsafe-${rowNum}-${colIndex}`;
 
     const performSave = async (isFailsafe = false) => {
+        // Double-check inside the async closure in case it was deleted during the 400ms delay
+        if (deletingRows.has(parseInt(rowNum))) return;
+
         // --- UPDATED: Save the full innerHTML so the hyperlink is sent to the database ---
         const currentValue = (cell.tagName === 'SPAN') ? cell.innerHTML : (cell.getAttribute('data-selected') || cell.value);
         const oldValue = cell.getAttribute('data-before-edit') || "";
@@ -5478,15 +5527,16 @@ async function handleAuthAction() {
         }
 
         // --- 2. STANDARD LOGIN/SIGNUP LOGIC ---
-        const isApproved = await verifyPermission(email);
-        if (!isApproved) {
-            errorEl.innerText = "Access Denied: This email is not authorized, please select request access.";
-            errorEl.style.display = 'block';
-            btn.disabled = false;
-            return;
-        }
+        const perm = await verifyPermission(email);
 
         if (isSignUpMode) {
+            if (!perm.isAuthorized) {
+                errorEl.innerText = "Access Denied: This email is not authorized. Please use \"Request Access\" instead.";
+                errorEl.style.display = 'block';
+                btn.disabled = false;
+                return;
+            }
+
             const { error } = await _supabase.auth.signUp({
                 email: email,
                 password: pin,
@@ -5500,9 +5550,29 @@ async function handleAuthAction() {
             successEl.innerText = "Success! Check your email to verify your account.";
             successEl.style.display = 'block';
         } else {
-            const { error } = await _supabase.auth.signInWithPassword({ email, password: pin });
-            if (error) throw error;
-            
+            // Attempt the sign-in itself so we can tell a bad PIN apart from a
+            // not-yet-authorized email, and report both if both are true.
+            const { error: loginError } = await _supabase.auth.signInWithPassword({ email, password: pin });
+
+            if (loginError || !perm.isAuthorized) {
+                const reasons = [];
+                if (!perm.isAuthorized) reasons.push("this email is not authorized for access.  Please use \"Request Access\" instead");
+                if (loginError) {
+                    const msg = (loginError.message || "").toLowerCase();
+                    if (msg.includes("invalid login credentials") || msg.includes("invalid")) {
+                        reasons.push("the PIN entered is incorrect");
+                    } else if (msg.includes("email not confirmed")) {
+                        reasons.push("this email hasn't been verified yet \u2014 check your inbox for the confirmation link");
+                    } else {
+                        reasons.push(loginError.message);
+                    }
+                }
+                errorEl.innerText = "Sign in failed: " + reasons.join(", and ") + ".";
+                errorEl.style.display = 'block';
+                btn.disabled = false;
+                return;
+            }
+
             localStorage.setItem('launchpad_email', email);
             location.reload(); 
         }
@@ -5826,8 +5896,18 @@ async function deleteFullRow(wrapperId, bypassConfirm = false) {
             
             const cells = rowElement.querySelectorAll('input, select, textarea, .status-cell');
             cells.forEach(cell => {
-                if (cell.classList.contains('status-cell')) cell.innerText = "...";
-                else cell.value = "";
+                if (cell.classList.contains('status-cell')) {
+                    cell.innerText = "...";
+                } else {
+                    cell.value = "";
+                    // NEW: Forcefully clear the custom multi-select attributes
+                    if (cell.hasAttribute('data-selected')) {
+                        cell.setAttribute('data-selected', '');
+                        if (cell.options && cell.options[0]) {
+                            cell.options[0].text = "+ Add Multi";
+                        }
+                    }
+                }
                 applyCellColor(cell, "");
             });
             // Ensure checkbox is cleared
@@ -5873,14 +5953,14 @@ async function lookupColumn5Value(rowNum, dayLabel, isBackground = false) {
     }
 
     try {
-        if (!isBackground) {
-            col5.innerText = "⏳ Checking...";
-        }
+        if (!isBackground) col5.innerText = "⏳ Checking...";
 
-        // Send the Translated Phase and the Asset Name to Apps Script
         const url = `${GOOGLE_SCRIPT_URL}?action=lookup&col3=${encodeURIComponent(phaseToLookup)}&col4=${encodeURIComponent(val4)}`;
         const response = await fetch(url);
         const data = await response.json();
+
+        // NEW FIX: Abort immediately if the user deleted this row while we were waiting!
+        if (deletingRows.has(parseInt(rowNum))) return;
 
         if (data && data.result) {
             if (data.result !== col5.innerText || (data.url && !col5.innerHTML.includes('target="_blank"'))) {
@@ -6079,82 +6159,82 @@ function collapseEverything() {
 
 function autoCleanUI() {
     const now = new Date();
-    const todayStr = [
-        now.getFullYear(),
-        String(now.getMonth() + 1).padStart(2, '0'),
-        String(now.getDate()).padStart(2, '0')
-    ].join('-');
-
+    const todayStr = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
     const allRows = document.querySelectorAll('.cell-row');
     if (allRows.length === 0) return;
-
     const company = (window.userCompany || "").toLowerCase();
 
     allRows.forEach(row => {
         const rowDate = row.getAttribute('data-date');
         const rowIndex = parseInt(row.getAttribute('data-row-index') || "0");
         const isOccupied = row.getAttribute('data-occupied') === 'true';
-        
         let shouldShow = true;
         
-        // 1. AutoClean Logic (hide past empty rows, hide excess future rows)
+        // Hide past empty rows
         if (rowDate < todayStr) {
             if (!isOccupied) {
-                const col3 = row.querySelector(`[id$="-c3"]`);
-                const col4 = row.querySelector(`[id$="-c4"]`);
-                const val3 = col3?.value?.toLowerCase() || "";
-                const val4 = col4?.value?.toLowerCase() || "";
-                const isTrulyEmpty = (val3 === "" || val3.includes("select")) && 
-                                     (val4 === "" || val4.includes("select"));
-                if (isTrulyEmpty) {
+                const col3 = row.querySelector('[data-col-index="3"]'); // Activity
+                const col4 = row.querySelector('[data-col-index="4"]'); // Asset
+                const val3 = col3?.value?.toLowerCase().trim() || "";
+                const val4 = col4?.value?.toLowerCase().trim() || "";
+                if ((val3 === "" || val3.includes("select")) && (val4 === "" || val4.includes("select"))) {
                     shouldShow = false;
                 }
             }
-        } else {
-            // Hide blank placeholder rows beyond the standard 15
-            if (rowIndex > 14 && !isOccupied) {
-                shouldShow = false;
-            }
+        } else if (rowIndex > 14 && !isOccupied) {
+            shouldShow = false;
         }
 
-        // 2. "My Activities" Filter Logic
+        // My Activities Filter
         if (shouldShow && isMyActivitiesActive) {
-            const col6 = row.querySelector('[id$="-c6"]');
-            const tradePartners = (col6?.getAttribute('data-selected') || col6?.value || "").toLowerCase();
-            
-            if (!tradePartners.includes(company)) {
-                shouldShow = false;
-            }
+            const col6 = row.querySelector('[data-col-index="6"]');
+            if (!(col6?.getAttribute('data-selected') || col6?.value || "").toLowerCase().includes(company)) shouldShow = false;
         }
 
-        // 3. "Places" Filter Logic (Multi-select)
+        // Places Filter (Col 2)
         if (shouldShow && selectedPlaces.length > 0) {
-            const col2 = row.querySelector('[id$="-c2"]');
-            const placeVal = (col2?.value || "").toLowerCase().trim();
-            if (!selectedPlaces.some(p => p.toLowerCase() === placeVal)) {
-                shouldShow = false;
+            const placeEl = row.querySelector('[data-col-index="2"]');
+            // 🟢 FILTER FIX: if the column isn't rendered (e.g. hidden via
+            // scheduleColConfig), don't blindly hide the row — that made a
+            // config/DOM problem look identical to "filtering is broken".
+            if (placeEl) {
+                const placeVal = (placeEl.value || "").toLowerCase().trim();
+                if (!selectedPlaces.some(p => p.toLowerCase().trim() === placeVal)) shouldShow = false;
+            } else {
+                console.warn('Place filter: column data-col-index="2" not found in row', row.id);
             }
         }
 
-        // 4. "Activities" Filter (Col 3)
+        // Activities Filter (Col 3)
         if (shouldShow && selectedActivities.length > 0) {
-            const col3 = row.querySelector('[id$="-c3"]');
-            const actVal = (col3?.value || "").toLowerCase().trim();
-            if (!selectedActivities.some(a => a.toLowerCase() === actVal)) {
-                shouldShow = false;
+            const actEl = row.querySelector('[data-col-index="3"]');
+            if (actEl) {
+                const actVal = (actEl.value || "").toLowerCase().trim();
+                if (!selectedActivities.some(a => a.toLowerCase().trim() === actVal)) shouldShow = false;
+            } else {
+                console.warn('Activity filter: column data-col-index="3" not found in row', row.id);
             }
         }
 
-        // 5. "Results" Filter (Col 7)
+        // Results Filter
         if (shouldShow && selectedResults.length > 0) {
-            const col7 = row.querySelector('[id$="-c7"]');
-            const resVal = (col7?.value || "").toLowerCase().trim();
-            if (!selectedResults.some(r => r.toLowerCase() === resVal)) {
-                shouldShow = false;
+            const resEl = row.querySelector('[data-col-index="7"]');
+            if (resEl) {
+                const resVal = (resEl.value || "").toLowerCase().trim();
+                if (!selectedResults.some(r => r.toLowerCase().trim() === resVal)) shouldShow = false;
+            } else {
+                console.warn('Result filter: column data-col-index="7" not found in row', row.id);
             }
         }
 
-        row.style.display = shouldShow ? 'flex' : 'none';
+        // 🟢 FILTER FIX: setProperty(..., 'important') guarantees this always wins,
+        // even if some other stylesheet rule (present now or added later) declares
+        // "display: ... !important" on .cell-row — a plain assignment can't beat that.
+        if (shouldShow) {
+            row.style.setProperty('display', 'flex', 'important');
+        } else {
+            row.style.setProperty('display', 'none', 'important');
+        }
     });
 }
 
@@ -6228,7 +6308,41 @@ async function submitAccessRequest() {
     successEl.style.display = 'block';
 
     try {
-        // 1. Log request with Company in Supabase
+        // 1a. Check if this email is already an authorized member
+        const { data: existingMember, error: memberCheckErr } = await _supabase
+            .from('PHXA7authorized_editors')
+            .select('email')
+            .eq('email', email)
+            .maybeSingle();
+
+        if (memberCheckErr) throw memberCheckErr;
+
+        if (existingMember) {
+            errorEl.innerText = "This email is already a member. Please sign in instead.";
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+            btn.disabled = false;
+            return;
+        }
+
+        // 1b. Check if a request for this email is already pending
+        const { data: existingRequest, error: requestCheckErr } = await _supabase
+            .from('PHXA7access_requests')
+            .select('email')
+            .eq('email', email)
+            .maybeSingle();
+
+        if (requestCheckErr) throw requestCheckErr;
+
+        if (existingRequest) {
+            errorEl.innerText = "You've already requested access with this email. Please wait for an admin to review it.";
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+            btn.disabled = false;
+            return;
+        }
+
+        // 2. Log request with Company in Supabase
         const { error: dbError } = await _supabase
             .from('PHXA7access_requests')
             .insert([{ email, company }]);
@@ -6263,16 +6377,27 @@ function getTimestamp() {
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-async function loadData(isSilent = false) {
+async function loadData(isSilent = false, preFetchedPromise = null) {
     try {
-        const { data, error } = await _supabase.from('PHXA7BackEndData').select('*');
+        let data, error;
+        
+        // Use the concurrently pre-fetched data to slash load times!
+        if (preFetchedPromise) {
+            const result = await preFetchedPromise;
+            data = result.data;
+            error = result.error;
+        } else {
+            const result = await _supabase.from('PHXA7BackEndData').select('*');
+            data = result.data;
+            error = result.error;
+        }
+        
         if (error) throw error;
 
         if (data) {
             data.forEach(row => {
                 if (deletingRows.has(row.id)) return;
 
-                // NEW: If the rows for this date aren't built yet, build them
                 const rowsDiv = document.getElementById(`rows-${row.day_label}`);
                 if (rowsDiv && rowsDiv.innerHTML === '') {
                     const addBtn = createAddRowsButton(rowsDiv, row.day_label);
@@ -6284,45 +6409,41 @@ async function loadData(isSilent = false) {
                     wrapper.setAttribute('data-occupied', 'true');
                 }
 
-                // Column Name Mapping
+                // THE FIX: Activity is now 2, Place is now 3
                 const dbCols = { 1: 'time', 2: 'place', 3: 'activity', 4: 'asset', 5: 'status', 6: 'trade_partners', 7: 'result', 8: 'notes', 9: 'duration' };
 
                 for (let col = 1; col <= 9; col++) {
                     const cellId = `${row.day_label}-r${row.id}-c${col}`;
                     const el = document.getElementById(cellId);
                     if (el && el !== document.activeElement) {
-    const content = row[dbCols[col]] || ""; // <-- Map the number to the new name
+                        const content = row[dbCols[col]] || ""; 
 
-    if (col === 6) {
-    el.setAttribute('data-selected', content);
-    
-    // Explicitly update the label for immediate visibility on load
-    if (el.options && el.options[0]) {
-        el.options[0].text = content ? `Selected: ${content}` : "+ Add Multi";
-    }
-    } else if (col === 5) {
-                    // ONLY overwrite if the HTML changed, so we don't destroy hyperlinks
-                    if (el.innerHTML.trim() !== content.trim()) {
-                        el.innerHTML = content;
+                        if (col === 6) {
+                            el.setAttribute('data-selected', content);
+                            if (el.options && el.options[0]) {
+                                el.options[0].text = content ? `Selected: ${content}` : "+ Add Multi";
+                            }
+                        } else if (col === 5) {
+                            if (el.innerHTML.trim() !== content.trim()) {
+                                el.innerHTML = content;
+                            }
+                        } else {
+                            if (el.tagName === 'SELECT' && content !== "") {
+                                const exists = Array.from(el.options).some(opt => opt.value === content);
+                                if (!exists) {
+                                    const newOpt = new Option(content, content);
+                                    el.add(newOpt);
+                                }
+                            }
+                            el.value = content; 
+                        }
+                        applyCellColor(el, content);
                     }
-                } else {
-        // --- THE FIX FOR COLS 1-4, 7 ---
-        if (el.tagName === 'SELECT' && content !== "") {
-        // Check if the option already exists in the dropdown
-        const exists = Array.from(el.options).some(opt => opt.value === content);
-        
-        // If the option is missing (because dropdownData hasn't finished), create it
-        if (!exists) {
-            const newOpt = new Option(content, content);
-            el.add(newOpt);
-        }
-    }
-    el.value = content; // Now the value will "stick"
-}
-applyCellColor(el, content);
-}
                 }
             });
+            // 🟢 FILTER FIX: rebuild the sidebar filter option lists from the
+            // exact same rows we just rendered, so filters always match live data.
+            rebuildFilterOptionsFromBackendData(data);
             autoCleanUI();
             return true;
         }
@@ -6737,13 +6858,17 @@ async function processBatchAdd() {
                 }
             };
 
-            // Inject the data
+            // Inject the data: Place is 2, Activity is 3
             setAndSave(1, timeVal);
             setAndSave(2, placeVal); // Automatically assigned!
             setAndSave(3, act);
             setAndSave(4, asset);
             setAndSave(6, selectedTrades);
             setAndSave(8, notesVal);
+
+            // Trigger the Google Sheets Status Lookup
+            lookupColumn5Value(rowNum, targetDate, false);
+            rowIndex++;
 
             // Trigger the Google Sheets Status Lookup
             lookupColumn5Value(rowNum, targetDate, false);

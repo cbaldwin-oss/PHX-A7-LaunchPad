@@ -1337,6 +1337,11 @@ body.dark-mode .phase-row {
         <span class="nav-text">Equipment Tracker</span>
     </div>
 
+        <div class="nav-item" onclick="switchMainView('bridge', this)">
+        <span class="nav-icon">🌉</span>
+        <span class="nav-text">The Bridge</span>
+    </div>
+
     <div class="nav-item" onclick="switchMainView('attributes', this)">
         <span class="nav-icon">🏷️</span>
         <span class="nav-text">Asset Attributes</span>
@@ -1528,6 +1533,14 @@ body.dark-mode .phase-row {
         src="equipment-tracker.html" 
         style="width: 100%; height: 100%; border: none; margin: 0; padding: 0; display: block;"
         title="Equipment Status Tracker">
+    </iframe>
+</div>
+
+<div id="bridge-view" style="display: none; height: 100%; width: 100%;">
+    <iframe 
+        src="bridge.html" 
+        style="width: 100%; height: 100%; border: none; margin: 0; padding: 0; display: block;"
+        title="The Bridge">
     </iframe>
 </div>
 
@@ -2187,6 +2200,7 @@ function switchMainView(viewType, btn) {
     const dash = document.getElementById('dashboard-view');
     const sched = document.getElementById('schedule-view');
     const equipmentView = document.getElementById('equipment-tracker-view'); 
+    const bridgeView = document.getElementById('bridge-view');
     const sett = document.getElementById('settings-view'); 
     const attrView = document.getElementById('attributes-view'); // <-- ADDED THIS
     
@@ -2210,6 +2224,7 @@ function switchMainView(viewType, btn) {
     if (sett) sett.style.display = 'none';
     if (sched) sched.style.display = 'none';
     if (equipmentView) equipmentView.style.display = 'none';
+    if (bridgeView) bridgeView.style.display = 'none';
     if (attrView) attrView.style.display = 'none'; // <-- ADDED THIS
     
     // By default, hide schedule-specific tools and show the alternate image
@@ -2228,6 +2243,9 @@ function switchMainView(viewType, btn) {
         }
     } else if (viewType === 'equipment') { 
         if (equipmentView) equipmentView.style.display = 'block'; 
+        if (appBody) appBody.style.width = 'calc(100% - 36px)'; 
+    } else if (viewType === 'bridge') { 
+        if (bridgeView) bridgeView.style.display = 'block'; 
         if (appBody) appBody.style.width = 'calc(100% - 36px)'; 
     } else if (viewType === 'attributes') {
         if (attrView) {

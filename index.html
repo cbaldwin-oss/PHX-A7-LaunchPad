@@ -1342,6 +1342,11 @@ body.dark-mode .phase-row {
         <span class="nav-text">The Bridge</span>
     </div>
 
+        <div class="nav-item" onclick="switchMainView('tamperseals', this)">
+        <span class="nav-icon">🩹</span>
+        <span class="nav-text">Tamper Seals</span>
+    </div>
+
     <div class="nav-item" onclick="switchMainView('attributes', this)">
         <span class="nav-icon">🏷️</span>
         <span class="nav-text">Asset Attributes</span>
@@ -1434,6 +1439,8 @@ body.dark-mode .phase-row {
                 <label style="display:flex; align-items:center; cursor:pointer;"><input type="checkbox" id="cfg-nav-equipment" style="margin-right:8px; transform:scale(1.2);"> Equipment Tracker</label>
                 <label style="display:flex; align-items:center; cursor:pointer;"><input type="checkbox" id="cfg-nav-attributes" style="margin-right:8px; transform:scale(1.2);"> Asset Attributes</label>
                 <label style="display:flex; align-items:center; cursor:pointer;"><input type="checkbox" id="cfg-nav-dashboard" style="margin-right:8px; transform:scale(1.2);"> Dashboard</label>
+                <label style="display:flex; align-items:center; cursor:pointer;"><input type="checkbox" id="cfg-nav-bridge" style="margin-right:8px; transform:scale(1.2);"> The Bridge</label>
+                <label style="display:flex; align-items:center; cursor:pointer;"><input type="checkbox" id="cfg-nav-tamperseals" style="margin-right:8px; transform:scale(1.2);"> Tamper Seals</label>
             </div>
         </div>
 
@@ -1541,6 +1548,14 @@ body.dark-mode .phase-row {
         src="bridge.html" 
         style="width: 100%; height: 100%; border: none; margin: 0; padding: 0; display: block;"
         title="The Bridge">
+    </iframe>
+</div>
+
+<div id="tamperseals-view" style="display: none; height: 100%; width: 100%;">
+    <iframe 
+        src="tamperseal.html" 
+        style="width: 100%; height: 100%; border: none; margin: 0; padding: 0; display: block;"
+        title="Tamper Seals">
     </iframe>
 </div>
 
@@ -1815,7 +1830,7 @@ function saveScheduleConfig() {
 }
 
 let appConfig = {
-    sidebar: { schedule: true, equipment: true, attributes: true, dashboard: true }
+    sidebar: { schedule: true, equipment: true, attributes: true, dashboard: true, bridge: true, tamperSeals: true }
 };
 
 function applySidebarConfig() {
@@ -1823,17 +1838,23 @@ function applySidebarConfig() {
     const navEquipment = document.querySelector('.nav-item[onclick*="equipment"]');
     const navAttributes = document.querySelector('.nav-item[onclick*="attributes"]');
     const navDashboard = document.querySelector('.nav-item[onclick*="dashboard"]');
+    const navBridge = document.querySelector('.nav-item[onclick*="bridge"]');
+    const navTamperSeals = document.querySelector('.nav-item[onclick*="tamperseals"]');
 
     if (navSchedule) navSchedule.style.display = appConfig.sidebar.schedule ? 'flex' : 'none';
     if (navEquipment) navEquipment.style.display = appConfig.sidebar.equipment ? 'flex' : 'none';
     if (navAttributes) navAttributes.style.display = appConfig.sidebar.attributes ? 'flex' : 'none';
     if (navDashboard) navDashboard.style.display = appConfig.sidebar.dashboard ? 'flex' : 'none';
+    if (navBridge) navBridge.style.display = appConfig.sidebar.bridge ? 'flex' : 'none';
+    if (navTamperSeals) navTamperSeals.style.display = appConfig.sidebar.tamperSeals ? 'flex' : 'none';
     
     // If the default Schedule view is hidden by the admin, auto-route the user to the first available module
     if (!appConfig.sidebar.schedule) {
         if (appConfig.sidebar.equipment && navEquipment) switchMainView('equipment', navEquipment);
         else if (appConfig.sidebar.attributes && navAttributes) switchMainView('attributes', navAttributes);
         else if (appConfig.sidebar.dashboard && navDashboard) switchMainView('dashboard', navDashboard);
+        else if (appConfig.sidebar.bridge && navBridge) switchMainView('bridge', navBridge);
+        else if (appConfig.sidebar.tamperSeals && navTamperSeals) switchMainView('tamperseals', navTamperSeals);
     }
 }
 
@@ -2209,6 +2230,7 @@ function switchMainView(viewType, btn) {
     const sched = document.getElementById('schedule-view');
     const equipmentView = document.getElementById('equipment-tracker-view'); 
     const bridgeView = document.getElementById('bridge-view');
+    const tamperSealsView = document.getElementById('tamperseals-view');
     const sett = document.getElementById('settings-view'); 
     const attrView = document.getElementById('attributes-view'); // <-- ADDED THIS
     
@@ -2233,6 +2255,7 @@ function switchMainView(viewType, btn) {
     if (sched) sched.style.display = 'none';
     if (equipmentView) equipmentView.style.display = 'none';
     if (bridgeView) bridgeView.style.display = 'none';
+    if (tamperSealsView) tamperSealsView.style.display = 'none';
     if (attrView) attrView.style.display = 'none'; // <-- ADDED THIS
     
     // By default, hide schedule-specific tools and show the alternate image
@@ -2254,6 +2277,18 @@ function switchMainView(viewType, btn) {
         if (appBody) appBody.style.width = 'calc(100% - 36px)'; 
     } else if (viewType === 'bridge') { 
         if (bridgeView) bridgeView.style.display = 'block'; 
+        if (appBody) appBody.style.width = 'calc(100% - 36px)'; 
+        // PERF/BUGFIX: the iframe renders its initial layout while still
+        // display:none (measurements are all 0 at that point), so its
+        // dependency connector lines never draw until something re-triggers
+        // a render. Tell it it's now actually visible so it can redo that
+        // measurement-dependent work.
+        const bridgeIframe = bridgeView ? bridgeView.querySelector('iframe') : null;
+        if (bridgeIframe && bridgeIframe.contentWindow) {
+            bridgeIframe.contentWindow.postMessage({ type: 'BRIDGE_VIEW_SHOWN' }, '*');
+        }
+    } else if (viewType === 'tamperseals') { 
+        if (tamperSealsView) tamperSealsView.style.display = 'block'; 
         if (appBody) appBody.style.width = 'calc(100% - 36px)'; 
     } else if (viewType === 'attributes') {
         if (attrView) {
@@ -4543,6 +4578,8 @@ function openScheduleConfigModal() {
     document.getElementById('cfg-nav-equipment').checked = appConfig.sidebar.equipment;
     document.getElementById('cfg-nav-attributes').checked = appConfig.sidebar.attributes;
     document.getElementById('cfg-nav-dashboard').checked = appConfig.sidebar.dashboard;
+    document.getElementById('cfg-nav-bridge').checked = appConfig.sidebar.bridge;
+    document.getElementById('cfg-nav-tamperseals').checked = appConfig.sidebar.tamperSeals;
 }
 
 // Helper to swap array items
@@ -4567,6 +4604,8 @@ async function saveAllSettings(btn) {
     appConfig.sidebar.equipment = document.getElementById('cfg-nav-equipment').checked;
     appConfig.sidebar.attributes = document.getElementById('cfg-nav-attributes').checked;
     appConfig.sidebar.dashboard = document.getElementById('cfg-nav-dashboard').checked;
+    appConfig.sidebar.bridge = document.getElementById('cfg-nav-bridge').checked;
+    appConfig.sidebar.tamperSeals = document.getElementById('cfg-nav-tamperseals').checked;
 
     // 2. Gather Schedule Config
     scheduleColConfig.forEach(col => {

@@ -1309,6 +1309,29 @@ document.addEventListener('click', (e) => {
 
 window.addEventListener('DOMContentLoaded', initApp);
 
+// BUGFIX: while this page loads inside a hidden (display:none) iframe — as
+// it does on first load, since LaunchPad only shows the Bridge view once
+// the user clicks it in the sidebar — every getBoundingClientRect()/
+// clientWidth measurement renderGantt() and renderConnections() rely on
+// reads back 0, so the dependency lines never draw (and the day-column
+// widths can end up wrong too) until *something* forces a fresh render
+// with real layout in place. Two independent triggers cover that:
+//   1) the parent page tells us directly when it flips us to visible
+//   2) a window resize event, which most browsers also fire when an
+//      ancestor's display:none->block causes this iframe to actually gain
+//      a size for the first time — a safety net if #1 isn't available
+//      (e.g. this file opened directly, not embedded).
+window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'BRIDGE_VIEW_SHOWN') {
+        requestAnimationFrame(() => renderGantt());
+    }
+});
+let __resizeRerenderTimer = null;
+window.addEventListener('resize', () => {
+    clearTimeout(__resizeRerenderTimer);
+    __resizeRerenderTimer = setTimeout(() => renderGantt(), 150);
+});
+
 // Defensive: re-measure and redraw connector lines on scroll, throttled
 // to one recompute per animation frame. The SVG overlay is positioned to
 // scroll naturally with its content, but forcing a fresh recompute here
